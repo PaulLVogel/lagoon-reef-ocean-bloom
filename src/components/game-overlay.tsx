@@ -21,12 +21,12 @@ export function GameOverlay() {
       <header className="flex items-start justify-between gap-3 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
         <div className="rounded-xl border border-border bg-surface/80 px-3 py-2 backdrop-blur-sm">
           <p className="font-display text-sm tracking-tight text-fg">Vampire Snake</p>
-          <p className="text-xs text-muted">Phase 2 · Weapons</p>
+          <p className="text-xs text-muted">Phase 3 · Swarm</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Stat label="HP" value={`${hud.hp}/${hud.maxHp}`} />
-          <Stat label="Dummy" value={`${hud.dummyHp ?? 0}/${hud.dummyMax ?? 100}`} />
-          <Stat label="Hits" value={String(hud.hits ?? 0)} />
+          <Stat label="Kills" value={String(hud.kills ?? 0)} />
+          <Stat label="Swarm" value={String(hud.swarm ?? 0)} />
           <Stat label="Body" value={String(hud.segments)} />
         </div>
       </header>
@@ -36,7 +36,7 @@ export function GameOverlay() {
       <div className="flex items-end justify-between p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <VirtualStick className="pointer-events-auto md:hidden" />
         <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted md:block">
-          WASD · auto-fire from body segments
+          WASD · body contact hurts
         </p>
         <div className="h-[120px] w-[120px] md:hidden" aria-hidden />
       </div>
@@ -51,9 +51,8 @@ export function GameOverlay() {
               Vampire Snake
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Weapons sit on the body. The first segment fires forward, the
-              second tracks the dummy, the third spins a blade. Walk the dummy
-              down to confirm damage.
+              The swarm comes from off-screen and walks the head. Head or any
+              body segment takes a hit. Turret tracks the nearest enemy.
             </p>
             <ul className="mt-5 space-y-1.5 text-sm text-fg">
               <li className="flex gap-2">
@@ -66,7 +65,7 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>
-                Dummy to the right of spawn
+                Keep moving — contact damage is real
               </li>
             </ul>
             <button
