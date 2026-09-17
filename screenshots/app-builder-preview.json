@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Vampire Snake",
+      "hasCanvas": false,
+      "bodyTextLen": 351,
+      "bodyTextHash": "fb5541b7c1d83f040b811ef4d0503e87d97db0811be5efb32f61b4db12d443a5",
+      "bodyTextPrefix": "Vampire Snake Phase 1 · Movement HP 100/100 BODY 6 SPEED 0 WASD ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Vampire Snake",
+      "hasCanvas": false,
+      "bodyTextLen": 328,
+      "bodyTextHash": "31ded933b5984f482ae5a80cf63dba10ebbad71f83f07a7b0cbdcf6c8997091f",
+      "bodyTextPrefix": "Vampire Snake Phase 1 · Movement HP 100/100 BODY 6 SPEED 0 ARENA",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

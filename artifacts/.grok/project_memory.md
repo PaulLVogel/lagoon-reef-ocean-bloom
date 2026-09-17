@@ -1,0 +1,7 @@
+- Project name: Vampire Snake — browser arena survival mixing Vampire Survivors, Brotato, and Snake [2026-09-17]
+- Tech: Phaser 3, Vite + TypeScript, target deploy Vercel [2026-09-17]
+- Segment movement rule: positionHistory only; no Arcade velocity/moveToObject/pathfinding; segment N is N*X frames behind head [2026-09-17]
+- Assets: Phaser geometric shapes only unless user requests PNGs [2026-09-17]
+- Modular split: SnakePlayer.ts for player/segments/weapons; MainScene.ts for spawns/collisions/state [2026-09-17]
+- Roadmap Phases 1–6 all unchecked: engine/movement, weapons, enemy AI, 30s wave timer, shop, EXP economy [2026-09-17]
+- Context file: artifacts/PROJECT_CONTEXT.md [2026-09-17]
