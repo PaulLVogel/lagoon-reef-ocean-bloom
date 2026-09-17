@@ -21,12 +21,13 @@ export function GameOverlay() {
       <header className="flex items-start justify-between gap-3 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
         <div className="rounded-xl border border-border bg-surface/80 px-3 py-2 backdrop-blur-sm">
           <p className="font-display text-sm tracking-tight text-fg">Vampire Snake</p>
-          <p className="text-xs text-muted">Phase 1 · Movement</p>
+          <p className="text-xs text-muted">Phase 2 · Weapons</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Stat label="HP" value={`${hud.hp}/${hud.maxHp}`} />
+          <Stat label="Dummy" value={`${hud.dummyHp ?? 0}/${hud.dummyMax ?? 100}`} />
+          <Stat label="Hits" value={String(hud.hits ?? 0)} />
           <Stat label="Body" value={String(hud.segments)} />
-          <Stat label="Speed" value={String(hud.speed)} />
         </div>
       </header>
 
@@ -35,7 +36,7 @@ export function GameOverlay() {
       <div className="flex items-end justify-between p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <VirtualStick className="pointer-events-auto md:hidden" />
         <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted md:block">
-          WASD or arrows · 8-way
+          WASD · auto-fire from body segments
         </p>
         <div className="h-[120px] w-[120px] md:hidden" aria-hidden />
       </div>
@@ -50,9 +51,9 @@ export function GameOverlay() {
               Vampire Snake
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              You are a pale head dragging a blood-red body. Move in eight
-              directions. Segments trail a delayed path so they never clump when
-              you stop.
+              Weapons sit on the body. The first segment fires forward, the
+              second tracks the dummy, the third spins a blade. Walk the dummy
+              down to confirm damage.
             </p>
             <ul className="mt-5 space-y-1.5 text-sm text-fg">
               <li className="flex gap-2">
@@ -61,11 +62,11 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">02</span>
-                Body follows recorded positions
+                Auto-fire from segments 1–3
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>
-                Weapons and waves come next
+                Dummy to the right of spawn
               </li>
             </ul>
             <button

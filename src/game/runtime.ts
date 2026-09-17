@@ -1,4 +1,4 @@
-import { DEFAULT_SEGMENT_COUNT } from "./constants";
+import { DEFAULT_SEGMENT_COUNT, DUMMY_HP } from "./constants";
 
 export type HudSnap = {
   playing: boolean;
@@ -6,6 +6,9 @@ export type HudSnap = {
   segments: number;
   hp: number;
   maxHp: number;
+  dummyHp: number;
+  dummyMax: number;
+  hits: number;
 };
 
 type Bucket = {
@@ -25,6 +28,9 @@ const fallback: Bucket = {
     segments: DEFAULT_SEGMENT_COUNT,
     hp: 100,
     maxHp: 100,
+    dummyHp: DUMMY_HP,
+    dummyMax: DUMMY_HP,
+    hits: 0,
   },
   started: false,
   injected: null,

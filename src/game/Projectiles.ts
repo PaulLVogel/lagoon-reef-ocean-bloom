@@ -1,0 +1,87 @@
+import * as Phaser from "phaser";
+import { BULLET_POOL, COLOR, WORLD_SIZE } from "./constants";
+import type { FireEvent } from "./Weapon";
+
+type Slot = {
+  gfx: Phaser.GameObjects.Arc;
+  vx: number;
+  vy: number;
+  damage: number;
+  ttl: number;
+  radius: number;
+  live: boolean;
+};
+
+export class Projectiles {
+  private readonly slots: Slot[] = [];
+  private cursor = 0;
+
+  constructor(scene: Phaser.Scene) {
+    for (let i = 0; i < BULLET_POOL; i++) {
+      const gfx = scene.add.circle(0, 0, 4, COLOR.blaster);
+      gfx.setVisible(false);
+      gfx.setActive(false);
+      gfx.setDepth(16);
+      this.slots.push({
+        gfx,
+        vx: 0,
+        vy: 0,
+        damage: 0,
+        ttl: 0,
+        radius: 4,
+        live: false,
+      });
+    }
+  }
+
+  spawn(ev: FireEvent) {
+    const slot = this.slots[this.cursor]!;
+    this.cursor = (this.cursor + 1) % this.slots.length;
+    slot.live = true;
+    slot.vx = ev.vx;
+    slot.vy = ev.vy;
+    slot.damage = ev.damage;
+    slot.ttl = 1.35;
+    slot.radius = ev.radius;
+    slot.gfx.setFillStyle(ev.color, 1);
+    slot.gfx.setScale(ev.radius / 4);
+    slot.gfx.setPosition(ev.x, ev.y);
+    slot.gfx.setVisible(true);
+    slot.gfx.setActive(true);
+  }
+
+  update(dt: number, onHit: (x: number, y: number, dmg: number, r: number) => boolean) {
+    for (const s of this.slots) {
+      if (!s.live) continue;
+      s.ttl -= dt;
+      s.gfx.x += s.vx * dt;
+      s.gfx.y += s.vy * dt;
+      if (
+        s.ttl <= 0 ||
+        s.gfx.x < 0 ||
+        s.gfx.y < 0 ||
+        s.gfx.x > WORLD_SIZE ||
+        s.gfx.y > WORLD_SIZE
+      ) {
+        this.kill(s);
+        continue;
+      }
+      if (onHit(s.gfx.x, s.gfx.y, s.damage, s.radius)) this.kill(s);
+    }
+  }
+
+  clear() {
+    for (const s of this.slots) this.kill(s);
+  }
+
+  destroy() {
+    for (const s of this.slots) s.gfx.destroy();
+    this.slots.length = 0;
+  }
+
+  private kill(s: Slot) {
+    s.live = false;
+    s.gfx.setVisible(false);
+    s.gfx.setActive(false);
+  }
+}

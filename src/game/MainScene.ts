@@ -1,12 +1,16 @@
 import * as Phaser from "phaser";
 import { COLOR, HUD_TICK_MS, TILE, WORLD_SIZE } from "./constants";
+import { Dummy } from "./Dummy";
 import { installControlsTest } from "./controlsTest";
+import { isGameStarted, installKeyboard, sampleMove } from "./input";
+import { Projectiles } from "./Projectiles";
 import { patchHud } from "./runtime";
-import { installKeyboard, isGameStarted, sampleMove } from "./input";
 import { SnakePlayer } from "./SnakePlayer";
 
 export class MainScene extends Phaser.Scene {
   private player!: SnakePlayer;
+  private dummy!: Dummy;
+  private shots!: Projectiles;
   private hudAcc = 0;
   private unbindKeys: (() => void) | null = null;
   private floor!: Phaser.GameObjects.TileSprite;
@@ -24,7 +28,9 @@ export class MainScene extends Phaser.Scene {
 
     const cx = WORLD_SIZE / 2;
     const cy = WORLD_SIZE / 2;
-    this.player = new SnakePlayer(this, cx, cy);
+    this.shots = new Projectiles(this);
+    this.player = new SnakePlayer(this, cx, cy, (ev) => this.shots.spawn(ev));
+    this.dummy = new Dummy(this, cx + 260, cy - 30);
 
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
     this.cameras.main.startFollow(this.player.head, true, 0.14, 0.14);
@@ -42,24 +48,64 @@ export class MainScene extends Phaser.Scene {
       segments: this.player.segments.length,
       speed: 0,
       hp: 100,
+      dummyHp: this.dummy.hp,
+      dummyMax: this.dummy.maxHp,
+      hits: 0,
     });
   }
 
-  update(_time: number, delta: number) {
+  update(time: number, delta: number) {
     const dt = Math.min(delta, 50) / 1000;
     const move = sampleMove();
-    this.player.update(dt, move.x, move.y);
+    const combatOn = isGameStarted();
+    const aim = this.dummy.alive ? { x: this.dummy.x, y: this.dummy.y } : null;
+
+    this.player.update(dt, move.x, move.y, time, aim, combatOn);
+    this.dummy.update(time);
+
+    if (combatOn) {
+      this.shots.update(dt, (x, y, dmg, r) => {
+        if (!this.dummy.overlaps(x, y, r)) return false;
+        this.dummy.hit(dmg, time);
+        this.floatDmg(x, y, dmg);
+        return true;
+      });
+      const bladeDmg = this.player.bladeHits(this.dummy.x, this.dummy.y, this.dummy.radius, time);
+      if (bladeDmg > 0 && this.dummy.hit(bladeDmg, time)) {
+        this.floatDmg(this.dummy.x, this.dummy.y, bladeDmg);
+      }
+    }
 
     this.hudAcc += delta;
     if (this.hudAcc >= HUD_TICK_MS) {
       this.hudAcc = 0;
-      if (isGameStarted()) {
+      if (combatOn) {
         patchHud({
           speed: Math.round(Math.hypot(this.player.vx, this.player.vy)),
           segments: this.player.segments.length,
+          dummyHp: this.dummy.hp,
+          dummyMax: this.dummy.maxHp,
+          hits: this.dummy.hits,
         });
       }
     }
+  }
+
+  private floatDmg(x: number, y: number, dmg: number) {
+    const t = this.add.text(x, y, `-${dmg}`, {
+      fontFamily: "IBM Plex Mono, monospace",
+      fontSize: "13px",
+      color: "#ece8e4",
+    });
+    t.setOrigin(0.5);
+    t.setDepth(30);
+    this.tweens.add({
+      targets: t,
+      y: y - 28,
+      alpha: 0,
+      duration: 420,
+      onComplete: () => t.destroy(),
+    });
   }
 
   private buildArena() {
@@ -113,6 +159,8 @@ export class MainScene extends Phaser.Scene {
     this.scale.off("resize", this.onResize, this);
     this.unbindKeys?.();
     this.unbindKeys = null;
+    this.shots?.destroy();
+    this.dummy?.destroy();
     this.player?.destroy();
     window.__gameReady = false;
     window.__controlsTest = undefined;

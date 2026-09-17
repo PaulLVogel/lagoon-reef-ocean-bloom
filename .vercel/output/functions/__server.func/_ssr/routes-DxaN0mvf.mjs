@@ -3,7 +3,7 @@ import { I as require_jsx_runtime, L as require_react } from "../_libs/@tanstack
 import { n as Play } from "../_libs/lucide-react.mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Dn3j3E5W.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DxaN0mvf.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -27,7 +27,13 @@ var COLOR = {
 	eye: 1708560,
 	segment: 12082263,
 	segmentAlt: 10111044,
-	segmentCore: 13924980
+	segmentCore: 13924980,
+	dummy: 7041920,
+	dummyHurt: 15261142,
+	blaster: 16051171,
+	turret: 12964056,
+	blade: 13924466,
+	hp: 12082263
 };
 var fallback = {
 	snap: {
@@ -35,7 +41,10 @@ var fallback = {
 		speed: 0,
 		segments: 6,
 		hp: 100,
-		maxHp: 100
+		maxHp: 100,
+		dummyHp: 100,
+		dummyMax: 100,
+		hits: 0
 	},
 	started: false,
 	injected: null,
@@ -209,7 +218,7 @@ function GameCanvas() {
 		if (!hostRef.current) return;
 		let game = null;
 		let cancelled = false;
-		import("./createGame-DKMlOEXw.mjs").then(({ createGame }) => {
+		import("./createGame-R2wOgV5y.mjs").then(({ createGame }) => {
 			if (cancelled || !hostRef.current) return;
 			game = createGame(hostRef.current);
 		});
@@ -300,22 +309,26 @@ function GameOverlay() {
 						children: "Vampire Snake"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-xs text-muted",
-						children: "Phase 1 · Movement"
+						children: "Phase 2 · Weapons"
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex gap-2",
+					className: "flex flex-wrap justify-end gap-2",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Stat, {
 							label: "HP",
 							value: `${hud.hp}/${hud.maxHp}`
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Stat, {
-							label: "Body",
-							value: String(hud.segments)
+							label: "Dummy",
+							value: `${hud.dummyHp ?? 0}/${hud.dummyMax ?? 100}`
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Stat, {
-							label: "Speed",
-							value: String(hud.speed)
+							label: "Hits",
+							value: String(hud.hits ?? 0)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Stat, {
+							label: "Body",
+							value: String(hud.segments)
 						})
 					]
 				})]
@@ -327,7 +340,7 @@ function GameOverlay() {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VirtualStick, { className: "pointer-events-auto md:hidden" }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted md:block",
-						children: "WASD or arrows · 8-way"
+						children: "WASD · auto-fire from body segments"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "h-[120px] w-[120px] md:hidden",
@@ -350,7 +363,7 @@ function GameOverlay() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-3 text-sm leading-relaxed text-muted",
-							children: "You are a pale head dragging a blood-red body. Move in eight directions. Segments trail a delayed path so they never clump when you stop."
+							children: "Weapons sit on the body. The first segment fires forward, the second tracks the dummy, the third spins a blade. Walk the dummy down to confirm damage."
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ul", {
 							className: "mt-5 space-y-1.5 text-sm text-fg",
@@ -367,14 +380,14 @@ function GameOverlay() {
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "text-muted",
 										children: "02"
-									}), "Body follows recorded positions"]
+									}), "Auto-fire from segments 1–3"]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
 									className: "flex gap-2",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "text-muted",
 										children: "03"
-									}), "Weapons and waves come next"]
+									}), "Dummy to the right of spawn"]
 								})
 							]
 						}),

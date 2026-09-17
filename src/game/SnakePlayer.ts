@@ -8,13 +8,20 @@ import {
   SEGMENT_RADIUS,
   WORLD_SIZE,
 } from "./constants";
+import { defaultLoadout, type AimPoint, type FireEvent, type Weapon } from "./Weapon";
 
 type HistoryPoint = { x: number; y: number };
+
+const BLADE_ORBIT = 34;
+const BLADE_RADIUS = 11;
+const BLASTER_SPEED = 520;
+const TURRET_SPEED = 460;
 
 export class SnakePlayer {
   readonly head: Phaser.GameObjects.Container;
   readonly segments: Phaser.GameObjects.Container[] = [];
   readonly positionHistory: HistoryPoint[] = [];
+  readonly weapons: Weapon[];
 
   speed = BASE_SPEED;
   facing = 0;
@@ -25,10 +32,21 @@ export class SnakePlayer {
   private readonly historyStride: number;
   private readonly headGlow: Phaser.GameObjects.Arc;
   private readonly snout: Phaser.GameObjects.Triangle;
+  private readonly blades: Phaser.GameObjects.Rectangle[] = [];
+  private bladeAngle = 0;
+  private readonly fire: (ev: FireEvent) => void;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, segmentCount = DEFAULT_SEGMENT_COUNT) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    fire: (ev: FireEvent) => void,
+    segmentCount = DEFAULT_SEGMENT_COUNT,
+  ) {
     this.scene = scene;
     this.historyStride = HISTORY_STRIDE;
+    this.fire = fire;
+    this.weapons = defaultLoadout();
 
     this.head = scene.add.container(x, y);
     this.head.setDepth(20);
@@ -63,6 +81,7 @@ export class SnakePlayer {
       this.spawnSegment();
     }
     this.layoutSegments();
+    this.attachMounts();
   }
 
   get x() {
@@ -91,7 +110,7 @@ export class SnakePlayer {
     this.layoutSegments();
   }
 
-  update(dt: number, ax: number, ay: number) {
+  update(dt: number, ax: number, ay: number, now: number, aim: AimPoint | null, combatOn: boolean) {
     const moving = ax !== 0 || ay !== 0;
     if (moving) {
       this.facing = Math.atan2(ay, ax);
@@ -120,13 +139,37 @@ export class SnakePlayer {
     this.headGlow.setScale(pulse);
 
     this.layoutSegments();
+    this.updateBlades(dt);
+    if (combatOn) this.tickWeapons(now, aim);
+  }
+
+  bladeHits(
+    dummyX: number,
+    dummyY: number,
+    dummyR: number,
+    now: number,
+  ): number {
+    const weapon = this.weapons.find((w) => w.type === "blade");
+    if (!weapon || now - weapon.lastFired < weapon.fireRate) return 0;
+    for (const blade of this.blades) {
+      const dx = blade.x - dummyX;
+      const dy = blade.y - dummyY;
+      const need = BLADE_RADIUS + dummyR;
+      if (dx * dx + dy * dy <= need * need) {
+        weapon.lastFired = now;
+        return weapon.damage;
+      }
+    }
+    return 0;
   }
 
   destroy() {
     this.head.destroy(true);
     for (const seg of this.segments) seg.destroy(true);
+    for (const b of this.blades) b.destroy();
     this.segments.length = 0;
     this.positionHistory.length = 0;
+    this.blades.length = 0;
   }
 
   private spawnSegment() {
@@ -140,6 +183,75 @@ export class SnakePlayer {
     const core = this.scene.add.circle(-2, 0, 4, COLOR.segmentCore, 0.85);
     container.add([halo, body, core]);
     this.segments.push(container);
+  }
+
+  private attachMounts() {
+    const blasterSeg = this.segments[0];
+    if (blasterSeg) {
+      const barrel = this.scene.add.rectangle(10, 0, 14, 5, COLOR.blaster);
+      blasterSeg.add(barrel);
+    }
+    const turretSeg = this.segments[1];
+    if (turretSeg) {
+      const cup = this.scene.add.circle(0, 0, 6, COLOR.turret);
+      turretSeg.add(cup);
+    }
+    const bladeSeg = this.segments[2];
+    if (bladeSeg) {
+      const a = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
+      const b = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
+      a.setDepth(19);
+      b.setDepth(19);
+      this.blades.push(a, b);
+    }
+  }
+
+  private updateBlades(dt: number) {
+    const host = this.segments[2];
+    if (!host || this.blades.length < 2) return;
+    this.bladeAngle += dt * 4.2;
+    this.blades.forEach((blade, i) => {
+      const ang = this.bladeAngle + i * Math.PI;
+      blade.setPosition(host.x + Math.cos(ang) * BLADE_ORBIT, host.y + Math.sin(ang) * BLADE_ORBIT);
+      blade.setRotation(ang + Math.PI / 2);
+    });
+  }
+
+  private tickWeapons(now: number, aim: AimPoint | null) {
+    for (const w of this.weapons) {
+      if (w.type === "blade") continue;
+      const seg = this.segments[w.segmentIndex];
+      if (!seg) continue;
+      if (now - w.lastFired < w.fireRate) continue;
+
+      if (w.type === "blaster") {
+        const ang = seg.rotation;
+        this.fire({
+          x: seg.x + Math.cos(ang) * 16,
+          y: seg.y + Math.sin(ang) * 16,
+          vx: Math.cos(ang) * BLASTER_SPEED,
+          vy: Math.sin(ang) * BLASTER_SPEED,
+          damage: w.damage,
+          color: COLOR.blaster,
+          radius: 4,
+        });
+        w.lastFired = now;
+      } else if (w.type === "turret" && aim) {
+        const dx = aim.x - seg.x;
+        const dy = aim.y - seg.y;
+        const mag = Math.hypot(dx, dy) || 1;
+        this.fire({
+          x: seg.x + (dx / mag) * 14,
+          y: seg.y + (dy / mag) * 14,
+          vx: (dx / mag) * TURRET_SPEED,
+          vy: (dy / mag) * TURRET_SPEED,
+          damage: w.damage,
+          color: COLOR.turret,
+          radius: 5,
+        });
+        w.lastFired = now;
+      }
+    }
   }
 
   private layoutSegments() {
