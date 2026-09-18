@@ -85,22 +85,33 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    const bucketTop = runtime();
+    if (bucketTop.pendingLevelStat || bucketTop.pendingLevelWeapon) {
+      const stat = bucketTop.pendingLevelStat;
+      const weapon = bucketTop.pendingLevelWeapon;
+      bucketTop.pendingLevelStat = null;
+      bucketTop.pendingLevelWeapon = null;
+      this.resolveLevelUp(stat, weapon);
+    }
     if (this.leveling) {
-      const bucket = runtime();
-      if (bucket.restartRequested) { bucket.restartRequested = false; this.scene.restart(); return; }
-      if (bucket.pendingLevelStat) { const stat = bucket.pendingLevelStat; bucket.pendingLevelStat = null; this.resolveLevelUp(stat); }
+      if (bucketTop.restartRequested) { bucketTop.restartRequested = false; this.scene.restart(); return; }
       return;
     }
     if (this.dead || this.waveClear) {
       const bucket = runtime();
       if (bucket.restartRequested) { bucket.restartRequested = false; this.scene.restart(); return; }
       if (this.waveClear && !this.dead) {
-        if (bucket.pendingUpgrade) {
-          const kind = bucket.pendingUpgrade, wtype = bucket.pendingWeaponType;
+        const queue = bucket.pendingBuys?.length
+          ? bucket.pendingBuys.splice(0, bucket.pendingBuys.length)
+          : bucket.pendingUpgrade
+            ? [{ kind: bucket.pendingUpgrade, weaponType: bucket.pendingWeaponType }]
+            : [];
+        if (queue.length) {
           bucket.pendingUpgrade = null; bucket.pendingWeaponType = null;
           const from = bucket.goldTallyFrom ?? this.gold;
           this.gold = bucket.snap.gold; bucket.goldTallyFrom = null;
-          this.tallyGoldDisplay(from, this.gold); this.applyUpgrade(kind, wtype);
+          this.tallyGoldDisplay(from, this.gold);
+          for (const buy of queue) this.applyUpgrade(buy.kind, buy.weaponType);
         }
         if (bucket.rerollRequested) {
           bucket.rerollRequested = false;
@@ -184,23 +195,34 @@ export class MainScene extends Phaser.Scene {
   }
 
   private heldOffers(): (ShopOffer | null)[] {
-    const bucket = runtime(); const held: (ShopOffer | null)[] = [null, null, null];
-    for (let i = 0; i < 3; i++) if (bucket.slotLocked[i] && bucket.shopOffers[i]) held[i] = bucket.shopOffers[i]!;
+    const bucket = runtime();
+    const slots = 6;
+    const held: (ShopOffer | null)[] = Array.from({ length: slots }, () => null);
+    for (let i = 0; i < slots; i++) {
+      if (bucket.heldOffers?.[i]) held[i] = { ...bucket.heldOffers[i]! };
+      else if (bucket.slotLocked[i] && bucket.shopOffers[i] && !(bucket.shopBought ?? []).includes(bucket.shopOffers[i]!.id)) {
+        held[i] = { ...bucket.shopOffers[i]! };
+      }
+    }
     return held;
   }
 
   private rollShop() {
     const bucket = runtime();
     const offers = rollShopOffers(this.wave, this.player.segments.length, { segmentVacuum: this.player.segmentVacuum, canMerge: (t) => this.player.canMerge(t), mergeToTier: (t) => this.player.mergePreviewTier(t), segmentCount: this.player.segments.length }, bucket.purchaseHistory, this.heldOffers());
-    bucket.shopOffers = offers; bucket.shopPicked = null; bucket.pendingUpgrade = null;
+    while (bucket.slotLocked.length < offers.length) bucket.slotLocked.push(false);
+    if (!bucket.heldOffers) bucket.heldOffers = [];
+    while (bucket.heldOffers.length < offers.length) bucket.heldOffers.push(null);
+    bucket.shopOffers = offers; bucket.shopPicked = null; bucket.shopBought = bucket.shopBought ?? [];
+    bucket.pendingUpgrade = null; bucket.pendingBuys = bucket.pendingBuys ?? [];
     bucket.frozenKinds = bucket.slotLocked.map((locked, i) => locked && offers[i] ? offers[i]!.kind : null);
     bucket.shopFrozen = bucket.slotLocked.some(Boolean);
-    patchHud({ shopOffers: offers, shopPicked: null, gold: this.gold, segments: this.player.segments.length, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked] });
+    patchHud({ shopOffers: offers, shopPicked: null, shopBought: [...(bucket.shopBought ?? [])], gold: this.gold, segments: this.player.segments.length, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked] });
   }
 
   private startNextWave() {
     const bucket = runtime();
-    const pricedOut = !bucket.shopPicked && !canAffordAny(bucket.snap.gold, bucket.shopOffers);
+    const pricedOut = !(bucket.shopBought?.length) && !canAffordAny(bucket.snap.gold, bucket.shopOffers);
     this.wave += 1; this.waveMs = WAVE_DURATION_MS; this.waveClear = false; this.spawnAcc = 0; this.bossSpawned = false;
     this.gold = bucket.snap.gold;
     if (this.nextWaveBank > 0) { this.gold += this.nextWaveBank; this.nextWaveBank = 0; }
@@ -211,8 +233,8 @@ export class MainScene extends Phaser.Scene {
       const nextHp = Math.min(this.player.headMaxHp, this.playerHp + SHOP_PITY_HP);
       pityHp = nextHp - this.playerHp; this.playerHp = nextHp;
     }
-    this.gemTimes = []; this.feverUntil = 0; bucket.shopOffers = []; bucket.shopPicked = null; bucket.pendingUpgrade = null; bucket.rerollRequested = false;
-    patchHud({ waveClear: false, waveMs: WAVE_DURATION_MS, wave: this.wave, swarm: 0, shopOffers: [], shopPicked: null, playing: true, segments: this.player.segments.length, hp: this.playerHp, kills: this.kills, gold: this.gold, goldDisplay: this.gold, totalGoldEarned: this.totalGoldEarned, nextWaveBank: 0, speed: Math.round(this.player.speed), fever: false, combo: 0, lastInterest: interest, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked], lastPityHp: pityHp, lastPityGold: pityGold });
+    this.gemTimes = []; this.feverUntil = 0; bucket.shopOffers = []; bucket.shopPicked = null; bucket.shopBought = []; bucket.pendingUpgrade = null; bucket.pendingBuys = []; bucket.rerollRequested = false;
+    patchHud({ waveClear: false, waveMs: WAVE_DURATION_MS, wave: this.wave, swarm: 0, shopOffers: [], shopPicked: null, shopBought: [], playing: true, segments: this.player.segments.length, hp: this.playerHp, kills: this.kills, gold: this.gold, goldDisplay: this.gold, totalGoldEarned: this.totalGoldEarned, nextWaveBank: 0, speed: Math.round(this.player.speed), fever: false, combo: 0, lastInterest: interest, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked], lastPityHp: pityHp, lastPityGold: pityGold });
   }
 
   private applyUpgrade(kind: ShopKind, weaponType: WeaponType | null) {
@@ -415,12 +437,19 @@ export class MainScene extends Phaser.Scene {
     const offers = rollLevelOffers(); setLevelOffers(offers);
     patchHud({ leveling: true, levelOffers: offers, hp: this.playerHp, maxHp: this.player.headMaxHp, playerLevel: this.playerLevel, xp: this.xp, xpNextLevel: this.xpNextLevel });
   }
-  private resolveLevelUp(stat: GlobalStatId) {
-    this.player.applyGlobalStat(stat); this.playerHp = this.player.headMaxHp; this.player.fullHeal(); this.leveling = false;
+  private resolveLevelUp(stat: GlobalStatId | null, weaponType: WeaponType | null = null) {
+    try {
+      if (weaponType) this.player.grantWeapon(weaponType);
+      if (stat) {
+        const hpGain = this.player.applyGlobalStat(stat);
+        if (hpGain > 0) this.playerHp = Math.min(this.player.headMaxHp, this.playerHp + hpGain);
+      }
+    } catch { /* still unpause */ }
+    this.playerHp = this.player.headMaxHp; this.player.fullHeal(); this.leveling = false;
+    runtime().leveling = false;
     try { this.physics?.world?.resume(); } catch { /* optional */ }
-    patchHud({ leveling: false, levelOffers: [], hp: this.playerHp, maxHp: this.player.headMaxHp, playerLevel: this.playerLevel, xp: this.xp, xpNextLevel: this.xpNextLevel, speed: Math.round(this.player.speed) });
+    patchHud({ leveling: false, levelOffers: [], hp: this.playerHp, maxHp: this.player.headMaxHp, playerLevel: this.playerLevel, xp: this.xp, xpNextLevel: this.xpNextLevel, speed: Math.round(this.player.speed), segments: this.player.segments.length });
   }
-
   private floatPickup(x: number, y: number, label: string, fever: boolean) {
     const t = this.add.text(x, y, label, { fontFamily: "IBM Plex Mono, monospace", fontSize: fever ? "16px" : "14px", color: fever ? "#f4d35e" : "#5eead4" });
     t.setOrigin(0.5); t.setDepth(31);
