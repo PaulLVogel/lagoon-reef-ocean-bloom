@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { isGameStarted, setGameStarted } from "@/game/input";
 import {
   getHud,
+  pickLevelOffer,
   pickShopOffer,
   requestNextWave,
   requestReroll,
@@ -93,6 +94,10 @@ export function GameOverlay() {
           <Stat label="Gold" value={String(goldShown)} danger={goldShown < 0} />
           <Stat label="Kills" value={String(hud.kills ?? 0)} />
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
+          <Stat
+            label={`Lv ${hud.playerLevel ?? 1}`}
+            value={`${hud.xp ?? 0}/${hud.xpNextLevel ?? 18}`}
+          />
           {hud.fever ? <Stat label="Fever" value={`x2 · ${hud.combo ?? 0}`} /> : null}
         </div>
       </header>
@@ -127,11 +132,11 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">02</span>
-                Green / blue / red gems, health, magnet — head only
+                Gems, health, magnet — head only. Gems grant XP.
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>
-                Buy one, lock cards, leftover gold carries
+                Level up mid-wave. Shop between waves.
               </li>
             </ul>
             <button
@@ -192,7 +197,36 @@ export function GameOverlay() {
         </div>
       ) : null}
 
-      {hud.waveClear && !hud.dead ? (
+      {hud.leveling && !hud.dead ? (
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/78 px-4 py-8 backdrop-blur-[2px]">
+          <div className="w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
+            <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
+              Level {hud.playerLevel ?? 1}
+            </p>
+            <h1 className="font-display mt-2 text-3xl leading-tight tracking-tight text-fg sm:text-4xl">
+              Level up
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              Full heal applied. Pick one global stat. Combat is paused.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {(hud.levelOffers ?? []).map((offer) => (
+                <button
+                  key={offer.id}
+                  type="button"
+                  onClick={() => pickLevelOffer(offer.id)}
+                  className="flex min-h-[8.5rem] flex-col rounded-2xl border border-border bg-surface p-4 text-left active:scale-[0.99]"
+                >
+                  <p className="font-display text-lg leading-tight text-fg">{offer.title}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{offer.blurb}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {hud.waveClear && !hud.dead && !hud.leveling ? (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/78 px-4 py-8 backdrop-blur-[2px]">
           <div className="w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
             <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
