@@ -1,11 +1,19 @@
 # Vampire Snake — live handoff
 
-Canonical GitHub: https://github.com/PaulLVogel/lagoon-reef-ocean-bloom
+Canonical GitHub: https://github.com/PaulLVogel/lagoon-reef-ocean-bloom  
 Live Vercel: https://vampire-snake-o34e.vercel.app/
 
 Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new work.
 
-Phases **1–3 are done**. Edit `/workspace/src/game` in an App Builder session, or `src/game` in this repo.
+## Future-chat contract
+
+1. Read this file + `PROJECT_CONTEXT.md`.
+2. Implement **only** the phase or bug the user named.
+3. Do not rebuild Phases 1–3 or the app shell.
+4. Push the changed files to `PaulLVogel/lagoon-reef-ocean-bloom` `main`.
+5. Never commit `.vercel/output`.
+
+Phases **1–3 are done** (swarm live on o34e; death screen + Restart on `main`).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**.
@@ -13,18 +21,6 @@ Phases **1–3 are done**. Edit `/workspace/src/game` in an App Builder session,
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand).
 - Phaser: `import * as Phaser from "phaser"`.
 - Shapes only. No PNGs unless asked.
-
-## Phase 2 weapons
-| Segment | Type | Behavior |
-|---|---|---|
-| 0 | blaster | fires along segment facing, 280ms, 6 dmg |
-| 1 | turret | aims nearest enemy, 420ms, 8 dmg |
-| 2 | blade | two orbiting rects, 160ms CD, 5 dmg |
-
-## Phase 3
-- `Enemy.ts`: purple circles, chase head, contact vs head **or any segment**.
-- Spawn outside camera view. Cap 28, ~850ms.
-- Player i-frames 450ms. HUD: HP / Kills / Swarm.
 
 ## Next
 Phase 4: 30s wave timer, ramp spawn rate, despawn + pause at 00:00.
