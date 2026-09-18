@@ -8,13 +8,14 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 ## Future-chat contract
 
 1. Read this file + `PROJECT_CONTEXT.md` first.
-2. Implement **only** the phase or bug the user named.
-3. Do not rebuild Phases 1–6 or the app shell.
-4. Push the changed files to `PaulLVogel/lagoon-reef-ocean-bloom` `main`.
+2. Implement **only** the phase or bug the user named this turn.
+3. Do not rebuild Phases 1–6 or the app shell. Do not invent Phase 7 unless named.
+4. Change the fewest files. Push those to `PaulLVogel/lagoon-reef-ocean-bloom` `main`.
 5. Never commit `.vercel/output`.
-6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main`. Do not start over.
+6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
+7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/`.
 
-Phases **1–6 are done**.
+Last shipped: **Phase 6** on `main` (`78ea937`).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**.
@@ -29,9 +30,10 @@ Phases **1–6 are done**.
 | Path | Owns |
 |---|---|
 | `src/game/SnakePlayer.ts` | head, segments, weapons, trail, upgrade apply helpers |
+| `src/game/Weapon.ts` | `Weapon` / `FireEvent` / default loadout |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, gem collect |
 | `src/game/Gems.ts` | colored EXP gem pool, head pickup, vacuum |
-| `src/game/shop.ts` | catalog + costs + `rollShopOffers` |
+| `src/game/shop.ts` | catalog + costs + `rollShopOffers` + `canAffordAny` |
 | `src/game/Enemy.ts` | purple chasers |
 | `src/game/Projectiles.ts` | bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap (incl. gold), `pickShopOffer()`, `requestNextWave()` |
@@ -51,3 +53,4 @@ Phases **1–6 are done**.
 - `endWave()` vacuums leftover gems into gold, then rolls 3 priced offers.
 - `pickShopOffer` deducts cost. Gold carries across waves. Restart zeros gold.
 - If nothing is affordable, Next Wave is allowed without a pick.
+- While `waveClear`, HUD tick must not overwrite shop-deducted gold.
