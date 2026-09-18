@@ -28,12 +28,13 @@ type BladePair = {
 
 export type BodySegment = {
   sprite: Phaser.GameObjects.Container;
-  segmentSprite: Phaser.GameObjects.Arc;
+  segmentSprite: Phaser.GameObjects.Image;
   hp: number;
   maxHp: number;
   isActive: boolean;
   healthBar: Phaser.GameObjects.Graphics;
   lastHit: number;
+  baseTint: number;
 };
 
 const BLADE_ORBIT = 34;
@@ -227,6 +228,7 @@ export class SnakePlayer {
       s.isActive = true;
       s.lastHit = 0;
       s.segmentSprite.clearTint();
+      s.segmentSprite.setTint(s.baseTint);
       s.healthBar.setVisible(true);
       this.paintHealthBar(s);
     }
@@ -305,15 +307,19 @@ export class SnakePlayer {
   }
 
   private spawnSegment() {
+    this.ensureSegTexture();
     const i = this.segments.length;
     const color = i % 2 === 0 ? COLOR.segment : COLOR.segmentAlt;
     const container = this.scene.add.container(this.head.x, this.head.y);
     container.setDepth(18 - Math.min(i, 10));
     const halo = this.scene.add.circle(0, 0, SEGMENT_RADIUS + 5, color, 0.16);
-    const segmentSprite = this.scene.add.circle(0, 0, SEGMENT_RADIUS, color);
-    segmentSprite.setStrokeStyle(1.5, COLOR.segmentCore, 0.55);
+    const ring = this.scene.add.circle(0, 0, SEGMENT_RADIUS, color, 0);
+    ring.setStrokeStyle(1.5, COLOR.segmentCore, 0.55);
+    const segmentSprite = this.scene.add.image(0, 0, "vs-seg");
+    segmentSprite.setDisplaySize(SEGMENT_RADIUS * 2, SEGMENT_RADIUS * 2);
+    segmentSprite.setTint(color);
     const core = this.scene.add.circle(-2, 0, 4, COLOR.segmentCore, 0.85);
-    container.add([halo, segmentSprite, core]);
+    container.add([halo, ring, segmentSprite, core]);
     const healthBar = this.scene.add.graphics();
     healthBar.setDepth(22);
     const state: BodySegment = {
@@ -324,10 +330,21 @@ export class SnakePlayer {
       isActive: true,
       healthBar,
       lastHit: 0,
+      baseTint: color,
     };
     this.paintHealthBar(state);
     this.body.push(state);
     this.segments.push(container);
+  }
+
+  private ensureSegTexture() {
+    if (this.scene.textures.exists("vs-seg")) return;
+    const g = this.scene.add.graphics();
+    g.setVisible(false);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(SEGMENT_RADIUS, SEGMENT_RADIUS, SEGMENT_RADIUS);
+    g.generateTexture("vs-seg", SEGMENT_RADIUS * 2, SEGMENT_RADIUS * 2);
+    g.destroy();
   }
 
   private greyOut(s: BodySegment) {
