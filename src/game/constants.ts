@@ -4,7 +4,6 @@ export const TILE = 96;
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 export const DESKTOP_ZOOM = 1;
-/** Mobile zoom-out: ~2/3 of desktop zoom so more of the arena is visible. */
 export const MOBILE_ZOOM = 2 / 3;
 export const MOBILE_WIDTH = 820;
 
@@ -13,6 +12,8 @@ export const SEGMENT_RADIUS = 13;
 export const HISTORY_STRIDE = 7;
 export const DEFAULT_SEGMENT_COUNT = 0;
 export const BASE_SPEED = 240;
+export const PLAYER_MAX_HP = 100;
+export const SEGMENT_MAX_HP = 100;
 
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
@@ -31,7 +32,7 @@ export const WAVE_DURATION_MS = 30_000;
 export const BOSS_WAVE = 10;
 
 export const GEM_POOL = 80;
-export const GEM_RADIUS = 6;
+export const GEM_RADIUS = 7;
 export const GEM_GREEN_VALUE = 1;
 export const GEM_BLUE_VALUE = 5;
 export const GEM_RED_VALUE = 10;
@@ -44,7 +45,6 @@ export const MAGNET_SPEED = 420;
 export const HEALTH_SIZE = 11;
 export const MAGNET_SIZE = 12;
 
-/** Collect reach is larger than the physical head hitbox. */
 export const PICKUP_RADIUS_BASE = HEAD_RADIUS + GEM_RADIUS + 14;
 export const PICKUP_RADIUS_STEP = 16;
 export const SEGMENT_VACUUM_RADIUS = 52;
@@ -53,6 +53,15 @@ export const COMBO_WINDOW_MS = 2000;
 export const COMBO_TRIGGER = 10;
 export const PICKUP_FLOAT_MS = 500;
 export const GOLD_TALLY_MS = 300;
+
+export const XP_BASE = 18;
+export const XP_EXPONENT = 1.5;
+
+export const STAT_HP_STEP = 20;
+export const STAT_SPEED_MUL = 1.12;
+export const STAT_CDR_MUL = 1.12;
+export const STAT_DMG_MUL = 1.15;
+export const STAT_ARMOR_STEP = 2;
 
 export const COLOR = {
   arena: 0x0c0e12,
@@ -80,13 +89,21 @@ export const COLOR = {
   singleShot: 0xf4ebe3,
   coneBurst: 0x7dd3fc,
   meleeSlash: 0xfbbf24,
+  mine: 0xf97316,
+  rail: 0x67e8f9,
+  chain: 0xc4b5fd,
+  aura: 0xa3e635,
   hp: 0xb85c57,
-  gemGreen: 0x5eead4,
-  gemBlue: 0x60a5fa,
-  gemRed: 0xf87171,
+  gemGreen: 0x22d3ee,
+  gemBlue: 0xfacc15,
+  gemRed: 0xf472b6,
   gemGold: 0xf4d35e,
   health: 0xef4444,
   magnet: 0xc084fc,
 } as const;
 
 export const HUD_TICK_MS = 80;
+
+export function xpForLevel(level: number) {
+  return Math.max(8, Math.round(XP_BASE * Math.pow(Math.max(1, level), XP_EXPONENT)));
+}
