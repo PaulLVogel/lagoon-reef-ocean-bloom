@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **mobile FIT+zoom, 1:1 weapons + hidden HP bars, enemy tiers, wave-10 boss, per-slot shop lock, Brotato weapon merge T1–T3**.
+Last shipped: **mobile FIT + camera zoom, head-only single-shot start, 1:1 weapons, hidden segment HP bars, enemy tiers + wave scaling, wave-10 boss, per-slot shop lock, Brotato weapon merge T1–T3** (`main` `ef12c07`).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -37,8 +37,10 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
-*   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`), hides its bar, and stops firing, but **still follows `positionHistory`**. Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, bars, and firing. Head contact still damages player HP; segment contact damages that segment only.
-*   **Weapons:** Exactly **one** distinct weapon per trailing segment (`single_shot` / `cone_burst` / `melee_slash`). No orbiting/circling extras. Each weapon fires from its own (x, y) at the nearest enemy **only if** that enemy is inside `baseRange * rangeMultiplier`. Dead segments cannot attack. Stats live on the weapon (`baseDamage`, `baseRange`, `baseFireRate`, multipliers). Shop items call `applyItemModifier(segmentIndex, stat, multiplier)`.
+*   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`) and stops firing, but **still follows `positionHistory`**. **Do not draw floating health bars** (logic stays). Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, and firing. Head contact still damages player HP; segment contact damages that segment only.
+*   **Weapons:** Head starts with **exactly one** `single_shot` (`DEFAULT_SEGMENT_COUNT = 0`). Each trailing segment has **exactly one** weapon (`single_shot` / `cone_burst` / `melee_slash`) rolled when the segment is granted. No orbiting extras. Each weapon fires from **its own origin** (head gun from head xy; segments from segment xy) at the nearest enemy **only if** inside `baseRange * rangeMultiplier * tierMul`. Dead segments cannot attack. Duplicate shop weapons **merge** via `grantWeapon` (tier 1–3). Shop stat items still call `applyItemModifier`.
+*   **Scale / camera:** `createGame` uses `Phaser.Scale.FIT` + `CENTER_BOTH` at 1280×720. Mobile zoom is `MOBILE_ZOOM` (`2/3`) on `cameras.main` only. HUD/shop/HP/gold live in `game-overlay.tsx` (DOM) and must ignore camera zoom.
+*   **Enemies:** Three tiers (`swarmer` / `grunt` / `brute`) plus wave-10 `boss`. Do not collapse back to one purple chaser. HP/damage/spawn rate scale with wave. Wave 10 stops normal spawns and spawns one boss.
 *   **Enemy chase:** Enemies seek the **nearest** head or segment (including greyed-out body), not only the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
@@ -85,11 +87,37 @@ Collect hook: pickup radius larger than head hitbox (shop `pickup_radius`), high
 - Interest: leftover gold (after buy or skip) gets `bankInterest` = `floor(gold * 0.1)` in `startNextWave`. Next Wave is allowed without a pick so players can bank.
 - Skip: `requestNextWave` allowed during shop even if offers are affordable (tactical bank path).
 - Pity: if `canAffordAny` is false and the player skips without a pick, `startNextWave` heals `SHOP_PITY_HP` (10, cap 100) and adds `SHOP_PITY_GOLD` (2) after interest. HUD `lastPityHp` / `lastPityGold`.
-- Freeze: `requestToggleFreeze()` stores `frozenKinds`. Next `rollShop()` rebuilds those 3 via `offersFromKinds` (costs rescale with wave). Reroll disabled while frozen. Buying an offer or Restart clears freeze.
+- Freeze (legacy): `requestToggleFreeze()` still exists but the live UI is **per-slot** Lock (`requestToggleSlotLock(index)`, `slotLocked[]`). Reroll and next shop keep locked cards; unlocked slots re-roll. Buying a card unlocks that slot only.
+- Enemy HP: tiers in `Enemy.ts` (`ENEMY_BASE`) × `waveHpMul` — do not revert to `ENEMY_HP + (wave-1)*6`.
 - Priced-out UI: cards gray + `.shop-next-pulse` on Next Wave when nothing is affordable.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted / rerolled).
 - Death Restart zeros gold, `purchaseHistory`, and freeze.
 - HUD gold display: `goldDisplay` ticks from the pre-buy value to the ledger with a 300ms Phaser tween (`GOLD_TALLY_MS`) on pick or reroll. Ledger `gold` stays instant for shop math.
 - Shop-phase late gems: while `waveClear`, `collectHead` still runs. Gem gold goes to `nextWaveBank` (not `hud.gold`) so shop costs / interest / pity stay stable. Bank dumps into gold at `startNextWave`.
-- Credit card (`credit_card`): rare overdraft offer. Always purchasable. Deducts cost even if gold goes negative (red HUD). Grants +2 blaster segments and +18% speed. Once per run. Interest uses `max(0, gold)` so debt earns none.
+- Credit card (`credit_card`): rare overdraft offer. Always purchasable. Deducts cost even if gold goes negative (red HUD). Grants two `grantWeapon` rolls and +18% speed. Once per run. Interest uses `max(0, gold)` so debt earns none.
 - Lifetime wealth: `totalGoldEarned` increments on gem collect, vacuum, interest, and pity. Purchases never subtract it. Death overlay shows earned + g/kill efficiency, separate from the spending pool.
+
+## 6. Live systems after Phase 6 (do not rebuild unless asked)
+
+These shipped on `main` `ef12c07`. Treat as current truth.
+
+### Mobile / camera
+- `src/game/createGame.ts`: `scale.mode = Phaser.Scale.FIT`, `autoCenter = CENTER_BOTH`, size 1280×720.
+- `MainScene.fitZoom()`: desktop `setZoom(1)`; mobile `setZoom(2/3)` when `gameSize.width < 820` or portrait width `< 1100`.
+- Overlay HUD is React DOM (`game-overlay.tsx`) — never parent HUD graphics to the world camera.
+- `game-canvas.tsx` must not force canvas `h-full w-full` (that fights FIT letterboxing).
+
+### Weapons / start / bars
+- Head-only start. `grantWeapon(type)` merges lowest-tier matching gun (incl. head single) up to T3, else `addArmedSegment(type)` with one mount.
+- `tickWeapons` skips duplicate `segmentIndex` entries.
+- Segment HP bars stay `setVisible(false)`.
+
+### Enemies
+- `Enemy` takes an `EnemySpec` (`kind`, radius, hp, speed, contact, color).
+- Wave 10: `tickSpawns` only `spawnBoss()` once. Boss `tickBoss` returns hostile shots; `MainScene.spawnHostile` / `tickHostiles` hurt the head.
+
+### Shop
+- `rollShopOffers(wave, segments, owned, history, held)` — `held[i]` is the locked `ShopOffer` or `null`.
+- Overlay: Lock button per card; "Reroll unlocked".
+- `pendingWeaponType` is set in `pickShopOffer` and consumed by `applyUpgrade`.
+
