@@ -1,7 +1,7 @@
 import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS, xpForLevel } from "./constants";
 import { allowsOverdraft, SHOP_REROLL_COST, SHOP_SLOTS, type ShopKind, type ShopOffer } from "./shop";
 import type { GlobalStatId, LevelOffer } from "./stats";
-import type { WeaponType } from "./Weapon";
+import type { WeaponSlot, WeaponType } from "./Weapon";
 
 export type HudSnap = {
   playing: boolean;
@@ -47,7 +47,8 @@ type Bucket = {
   rerollRequested: boolean;
   pendingUpgrade: ShopKind | null;
   pendingWeaponType: WeaponType | null;
-  pendingBuys: { kind: ShopKind; weaponType: WeaponType | null }[];
+  pendingWeaponSlot: WeaponSlot | null;
+  pendingBuys: { kind: ShopKind; weaponType: WeaponType | null; weaponSlot: WeaponSlot | null }[];
   shopOffers: ShopOffer[];
   shopPicked: string | null;
   shopBought: string[];
@@ -115,6 +116,7 @@ function emptyBucket(): Bucket {
     rerollRequested: false,
     pendingUpgrade: null,
     pendingWeaponType: null,
+    pendingWeaponSlot: null,
     pendingBuys: [],
     shopOffers: [],
     shopPicked: null,
@@ -158,6 +160,7 @@ export function runtime(): Bucket {
   if (typeof b.totalGoldEarned !== "number") b.totalGoldEarned = 0;
   if (b.goldTallyFrom === undefined) b.goldTallyFrom = null;
   if (b.pendingWeaponType === undefined) b.pendingWeaponType = null;
+  if (b.pendingWeaponSlot === undefined) b.pendingWeaponSlot = null;
   if (typeof b.leveling !== "boolean") b.leveling = false;
   if (b.pendingLevelStat === undefined) b.pendingLevelStat = null;
   if (!b.levelOffers) b.levelOffers = [];
@@ -197,6 +200,7 @@ export function requestRestart() {
   b.rerollRequested = false;
   b.pendingUpgrade = null;
   b.pendingWeaponType = null;
+  b.pendingWeaponSlot = null;
   b.pendingBuys = [];
   b.shopOffers = [];
   b.shopPicked = null;
@@ -259,9 +263,14 @@ export function pickShopOffer(id: string) {
   if (!allowsOverdraft(offer.kind) && b.snap.gold < offer.cost) return;
   b.shopPicked = id;
   b.shopBought = [...b.shopBought, id];
-  b.pendingBuys.push({ kind: offer.kind, weaponType: offer.weaponType ?? null });
+  b.pendingBuys.push({
+    kind: offer.kind,
+    weaponType: offer.weaponType ?? null,
+    weaponSlot: offer.weaponSlot ?? null,
+  });
   b.pendingUpgrade = offer.kind;
   b.pendingWeaponType = offer.weaponType ?? null;
+  b.pendingWeaponSlot = offer.weaponSlot ?? null;
   b.purchaseHistory = [...b.purchaseHistory, offer.kind];
   const idx = b.shopOffers.findIndex((o) => o.id === id);
   if (idx >= 0) {
@@ -291,6 +300,7 @@ export function requestReroll() {
   b.rerollRequested = true;
 }
 
+/** Per-card lock. Locked slots survive reroll and the next shop. */
 export function requestToggleSlotLock(index: number) {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
@@ -309,6 +319,7 @@ export function requestToggleSlotLock(index: number) {
 export function requestToggleFreeze() {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
+  if (b.shopPicked) return;
   if (b.shopFrozen) {
     clearLocks(b);
     patchHud({ shopFrozen: false, slotLocked: emptyLocks() });
@@ -318,7 +329,6 @@ export function requestToggleFreeze() {
   b.shopFrozen = true;
   b.slotLocked = b.shopOffers.map(() => true);
   b.frozenKinds = b.shopOffers.map((o) => o.kind);
-  b.heldOffers = b.shopOffers.map((o) => ({ ...o }));
   patchHud({ shopFrozen: true, slotLocked: [...b.slotLocked] });
 }
 
@@ -344,6 +354,7 @@ export function pickLevelOffer(id: string) {
   if (!offer) return;
   b.pendingLevelStat = offer.stat ?? null;
   b.pendingLevelWeapon = offer.weaponType ?? null;
+  b.pendingWeaponSlot = offer.weaponSlot ?? null;
   b.leveling = false;
   b.levelOffers = [];
   patchHud({ leveling: false, levelOffers: [] });

@@ -15,7 +15,12 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
-Last shipped: **split head/segment weapon pools, head inventory, color-coded segments, mine cap + 2s fuse, mortar artillery** (on top of 6-slot shop, lock-carry, level-up weapons).
+8. Shop multi-buy is live: overlay can buy several cards before Next Wave. `pickShopOffer` appends to `runtime.pendingBuys`. **`MainScene` must drain that whole queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame.
+9. **Flanker** enemies and **Tangled** overlap penalty are **not** in this repo. GitHub search is empty. Do not invent them unless the user names them as a new feature.
+10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
+11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
+
+Last shipped: **weapon assignment overhaul on `main`** — split head/segment pools, head inventory, color-coded segments, mine cap + 2s fuse, mortar, **plus** GitHub shop `pendingBuys` drain restored in `MainScene`.
 
 ## Rules
 
@@ -38,13 +43,13 @@ Last shipped: **split head/segment weapon pools, head inventory, color-coded seg
 |---|---|
 | `src/game/SnakePlayer.ts` | head, trail, HP/grey-out, weapons + merge, `applyGlobalStat`, `fullHeal()`, armor, auras |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
-| `src/game/MainScene.ts` | FIT zoom, tiers + boss, mines (2s fuse), mortar shells, XP/level-up pause, shop apply, gems |
+| `src/game/MainScene.ts` | FIT zoom, tiers + boss, mines (2s fuse), mortar shells, XP/level-up pause, **pendingBuys drain**, shop apply |
 | `src/game/Gems.ts` | star gems + health/magnet, pop, magnetize, vacuum, `collectHead` |
 | `src/game/stats.ts` | 6 global stats + head/segment weapon offers in `rollLevelOffers` |
 | `src/game/shop.ts` | `SHOP_SLOTS = 6`, `add_head_weapon` + `add_blaster`, lock copies the offer object |
 | `src/game/Enemy.ts` | `swarmer` / `grunt` / `brute` / `boss` specs, chase, boss volley+charge |
 | `src/game/Projectiles.ts` | player bullet pool + `clear()` |
-| `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, shop lock/reroll/next |
+| `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, `pendingBuys` queue, shop lock/reroll/next |
 | `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors |
 | `src/game/createGame.ts` | Phaser.Game with `Scale.FIT` + `CENTER_BOTH` |
 | `src/components/game-overlay.tsx` | start / HUD / XP / level-up menu / death / shop + Lock |

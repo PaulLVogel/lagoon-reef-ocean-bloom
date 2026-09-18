@@ -12,12 +12,31 @@ import { isGameStarted, installKeyboard, sampleMove } from "./input";
 import { Projectiles } from "./Projectiles";
 import { patchHud, runtime, setLevelOffers } from "./runtime";
 import { rollLevelOffers, type GlobalStatId } from "./stats";
-import { bankInterest, canAffordAny, rollShopOffers, SHOP_PITY_GOLD, SHOP_PITY_HP, type ShopKind, type ShopOffer } from "./shop";
+import { bankInterest, canAffordAny, rollShopOffers, SHOP_PITY_GOLD, SHOP_PITY_HP, SHOP_SLOTS, type ShopKind, type ShopOffer } from "./shop";
 import { SnakePlayer } from "./SnakePlayer";
-import { randomWeaponType, type FireEvent, type WeaponType } from "./Weapon";
+import { randomSegmentWeaponType, type FireEvent, type WeaponSlot, type WeaponType } from "./Weapon";
 
 type HostileShot = { gfx: Phaser.GameObjects.Arc; vx: number; vy: number; damage: number; live: boolean };
-type Mine = { gfx: Phaser.GameObjects.Arc; x: number; y: number; r: number; damage: number; live: boolean };
+type Mine = {
+  gfx: Phaser.GameObjects.Arc;
+  x: number;
+  y: number;
+  r: number;
+  damage: number;
+  live: boolean;
+  armedAt: number;
+};
+type MortarShell = {
+  gfx: Phaser.GameObjects.Arc;
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  speed: number;
+  damage: number;
+  aoe: number;
+  live: boolean;
+};
 
 export class MainScene extends Phaser.Scene {
   private player!: SnakePlayer;
@@ -49,6 +68,7 @@ export class MainScene extends Phaser.Scene {
   private xpNextLevel = xpForLevel(1);
   private leveling = false;
   private mines: Mine[] = [];
+  private mortars: MortarShell[] = [];
   private pierceMarks = new WeakMap<Enemy, Set<number>>();
 
   constructor() { super("main"); }
@@ -58,7 +78,7 @@ export class MainScene extends Phaser.Scene {
     this.kills = 0; this.gold = 0; this.goldDisplay = 0; this.nextWaveBank = 0; this.totalGoldEarned = 0;
     this.dead = false; this.waveClear = false; this.wave = 1; this.waveMs = WAVE_DURATION_MS;
     this.enemies = []; this.gemTimes = []; this.feverUntil = 0; this.bossSpawned = false;
-    this.playerLevel = 1; this.xp = 0; this.xpNextLevel = xpForLevel(1); this.leveling = false; this.mines = [];
+    this.playerLevel = 1; this.xp = 0; this.xpNextLevel = xpForLevel(1); this.leveling = false; this.mines = []; this.mortars = [];
   }
 
   create() {
@@ -89,9 +109,11 @@ export class MainScene extends Phaser.Scene {
     if (bucketTop.pendingLevelStat || bucketTop.pendingLevelWeapon) {
       const stat = bucketTop.pendingLevelStat;
       const weapon = bucketTop.pendingLevelWeapon;
+      const slot = bucketTop.pendingWeaponSlot;
       bucketTop.pendingLevelStat = null;
       bucketTop.pendingLevelWeapon = null;
-      this.resolveLevelUp(stat, weapon);
+      bucketTop.pendingWeaponSlot = null;
+      this.resolveLevelUp(stat, weapon, slot);
     }
     if (this.leveling) {
       if (bucketTop.restartRequested) { bucketTop.restartRequested = false; this.scene.restart(); return; }
@@ -104,14 +126,14 @@ export class MainScene extends Phaser.Scene {
         const queue = bucket.pendingBuys?.length
           ? bucket.pendingBuys.splice(0, bucket.pendingBuys.length)
           : bucket.pendingUpgrade
-            ? [{ kind: bucket.pendingUpgrade, weaponType: bucket.pendingWeaponType }]
+            ? [{ kind: bucket.pendingUpgrade, weaponType: bucket.pendingWeaponType, weaponSlot: bucket.pendingWeaponSlot }]
             : [];
         if (queue.length) {
-          bucket.pendingUpgrade = null; bucket.pendingWeaponType = null;
+          bucket.pendingUpgrade = null; bucket.pendingWeaponType = null; bucket.pendingWeaponSlot = null;
           const from = bucket.goldTallyFrom ?? this.gold;
           this.gold = bucket.snap.gold; bucket.goldTallyFrom = null;
           this.tallyGoldDisplay(from, this.gold);
-          for (const buy of queue) this.applyUpgrade(buy.kind, buy.weaponType);
+          for (const buy of queue) this.applyUpgrade(buy.kind, buy.weaponType, buy.weaponSlot ?? null);
         }
         if (bucket.rerollRequested) {
           bucket.rerollRequested = false;
@@ -140,7 +162,7 @@ export class MainScene extends Phaser.Scene {
           if (e.kind === "boss") for (const s of e.tickBoss(time, this.player.x, this.player.y)) this.spawnHostile(s.x, s.y, s.vx, s.vy, s.damage);
         }
         this.shots.update(dt, (x, y, dmg, r, mark, pierce) => this.hitEnemiesAt(x, y, dmg, r, mark, pierce));
-        this.tickMines(); this.tickHostiles(dt, time); this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
+        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
       }
     }
     this.hudAcc += delta;
@@ -184,21 +206,21 @@ export class MainScene extends Phaser.Scene {
 
   private endWave() {
     this.waveMs = 0; this.waveClear = true; this.player.reviveAll();
-    for (const e of this.enemies) e.destroy(); this.enemies = []; this.shots.clear(); this.clearHostiles(); this.clearMines();
+    for (const e of this.enemies) e.destroy(); this.enemies = []; this.shots.clear(); this.clearHostiles(); this.clearMines(); this.clearMortars();
     const vacuumed = this.gems.vacuum();
     if (vacuumed > 0) { this.gold += vacuumed; this.totalGoldEarned += vacuumed; this.grantXp(vacuumed); }
     this.goldDisplay = this.gold; this.gemTimes = []; this.feverUntil = 0; this.bossSpawned = false;
     const bucket = runtime();
-    bucket.shopPicked = null; bucket.pendingUpgrade = null; bucket.pendingWeaponType = null;
+    bucket.shopPicked = null; bucket.pendingUpgrade = null; bucket.pendingWeaponType = null; bucket.pendingWeaponSlot = null;
+    bucket.pendingBuys = [];
     bucket.nextWaveRequested = false; bucket.rerollRequested = false; this.rollShop();
     patchHud({ waveMs: 0, swarm: 0, waveClear: true, playing: true, wave: this.wave, shopPicked: null, segments: this.player.segments.length, hp: this.playerHp, kills: this.kills, gold: this.gold, goldDisplay: this.goldDisplay, totalGoldEarned: this.totalGoldEarned, nextWaveBank: this.nextWaveBank, fever: false, combo: 0, lastInterest: 0, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked] });
   }
 
   private heldOffers(): (ShopOffer | null)[] {
     const bucket = runtime();
-    const slots = 6;
-    const held: (ShopOffer | null)[] = Array.from({ length: slots }, () => null);
-    for (let i = 0; i < slots; i++) {
+    const held: (ShopOffer | null)[] = Array.from({ length: SHOP_SLOTS }, () => null);
+    for (let i = 0; i < SHOP_SLOTS; i++) {
       if (bucket.heldOffers?.[i]) held[i] = { ...bucket.heldOffers[i]! };
       else if (bucket.slotLocked[i] && bucket.shopOffers[i] && !(bucket.shopBought ?? []).includes(bucket.shopOffers[i]!.id)) {
         held[i] = { ...bucket.shopOffers[i]! };
@@ -209,12 +231,19 @@ export class MainScene extends Phaser.Scene {
 
   private rollShop() {
     const bucket = runtime();
-    const offers = rollShopOffers(this.wave, this.player.segments.length, { segmentVacuum: this.player.segmentVacuum, canMerge: (t) => this.player.canMerge(t), mergeToTier: (t) => this.player.mergePreviewTier(t), segmentCount: this.player.segments.length }, bucket.purchaseHistory, this.heldOffers());
+    const offers = rollShopOffers(this.wave, this.player.segments.length, {
+      segmentVacuum: this.player.segmentVacuum,
+      canMerge: (t, slot) => this.player.canMerge(t, slot),
+      mergeToTier: (t, slot) => this.player.mergePreviewTier(t, slot),
+      segmentCount: this.player.segments.length,
+      mineTier: this.player.mineTier(),
+    }, bucket.purchaseHistory, this.heldOffers());
     while (bucket.slotLocked.length < offers.length) bucket.slotLocked.push(false);
     if (!bucket.heldOffers) bucket.heldOffers = [];
     while (bucket.heldOffers.length < offers.length) bucket.heldOffers.push(null);
     bucket.shopOffers = offers; bucket.shopPicked = null; bucket.shopBought = bucket.shopBought ?? [];
-    bucket.pendingUpgrade = null; bucket.pendingBuys = bucket.pendingBuys ?? [];
+    bucket.pendingUpgrade = null; bucket.pendingWeaponType = null; bucket.pendingWeaponSlot = null;
+    bucket.pendingBuys = bucket.pendingBuys ?? [];
     bucket.frozenKinds = bucket.slotLocked.map((locked, i) => locked && offers[i] ? offers[i]!.kind : null);
     bucket.shopFrozen = bucket.slotLocked.some(Boolean);
     patchHud({ shopOffers: offers, shopPicked: null, shopBought: [...(bucket.shopBought ?? [])], gold: this.gold, segments: this.player.segments.length, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked] });
@@ -233,13 +262,17 @@ export class MainScene extends Phaser.Scene {
       const nextHp = Math.min(this.player.headMaxHp, this.playerHp + SHOP_PITY_HP);
       pityHp = nextHp - this.playerHp; this.playerHp = nextHp;
     }
-    this.gemTimes = []; this.feverUntil = 0; bucket.shopOffers = []; bucket.shopPicked = null; bucket.shopBought = []; bucket.pendingUpgrade = null; bucket.pendingBuys = []; bucket.rerollRequested = false;
+    this.gemTimes = []; this.feverUntil = 0; bucket.shopOffers = []; bucket.shopPicked = null; bucket.shopBought = []; bucket.pendingUpgrade = null; bucket.pendingWeaponType = null; bucket.pendingWeaponSlot = null; bucket.pendingBuys = []; bucket.rerollRequested = false;
     patchHud({ waveClear: false, waveMs: WAVE_DURATION_MS, wave: this.wave, swarm: 0, shopOffers: [], shopPicked: null, shopBought: [], playing: true, segments: this.player.segments.length, hp: this.playerHp, kills: this.kills, gold: this.gold, goldDisplay: this.gold, totalGoldEarned: this.totalGoldEarned, nextWaveBank: 0, speed: Math.round(this.player.speed), fever: false, combo: 0, lastInterest: interest, shopFrozen: bucket.shopFrozen, slotLocked: [...bucket.slotLocked], lastPityHp: pityHp, lastPityGold: pityGold });
   }
 
-  private applyUpgrade(kind: ShopKind, weaponType: WeaponType | null) {
-    if (kind === "add_blaster") this.player.grantWeapon(weaponType ?? randomWeaponType());
-    else if (kind === "add_2_blasters") { this.player.grantWeapon(randomWeaponType()); this.player.grantWeapon(randomWeaponType()); }
+  private applyUpgrade(kind: ShopKind, weaponType: WeaponType | null, slot: WeaponSlot | null = null) {
+    if (kind === "add_blaster") this.player.grantWeapon(weaponType ?? randomSegmentWeaponType(this.player.mineAtCap()), slot ?? "segment");
+    else if (kind === "add_head_weapon") this.player.grantWeapon(weaponType ?? "single_shot", slot ?? "head");
+    else if (kind === "add_2_blasters") {
+      this.player.grantWeapon(randomSegmentWeaponType(this.player.mineAtCap()), "segment");
+      this.player.grantWeapon(randomSegmentWeaponType(this.player.mineAtCap()), "segment");
+    }
     else if (kind === "turret_rate") this.player.buffWeaponType("cone_burst", "fireRate", 1.25);
     else if (kind === "snake_speed") this.player.boostSpeed(1.18);
     else if (kind === "blaster_rate") this.player.buffWeaponType("single_shot", "fireRate", 1.25);
@@ -252,7 +285,11 @@ export class MainScene extends Phaser.Scene {
     else if (kind === "stat_damage") this.player.applyGlobalStat("damage");
     else if (kind === "stat_armor") this.player.applyGlobalStat("armor");
     else if (kind === "segment_vacuum") this.player.enableSegmentVacuum();
-    else if (kind === "credit_card") { this.player.grantWeapon(randomWeaponType()); this.player.grantWeapon(randomWeaponType()); this.player.boostSpeed(1.18); }
+    else if (kind === "credit_card") {
+      this.player.grantWeapon(randomSegmentWeaponType(this.player.mineAtCap()), "segment");
+      this.player.grantWeapon(randomSegmentWeaponType(this.player.mineAtCap()), "segment");
+      this.player.boostSpeed(1.18);
+    }
     patchHud({ segments: this.player.segments.length, hp: this.playerHp, maxHp: this.player.headMaxHp, gold: this.gold, speed: Math.round(this.player.speed) });
   }
 
@@ -261,6 +298,7 @@ export class MainScene extends Phaser.Scene {
     else if (ev.kind === "mine") this.plantMine(ev);
     else if (ev.kind === "chain") this.applyChain(ev);
     else if (ev.kind === "aura") this.applyAura(ev);
+    else if (ev.kind === "mortar") this.launchMortar(ev);
     else this.shots.spawn(ev);
   }
 
@@ -361,7 +399,7 @@ export class MainScene extends Phaser.Scene {
 
   private onDead() {
     this.dead = true; runtime().started = false;
-    for (const e of this.enemies) e.destroy(); this.enemies = []; this.shots.clear(); this.clearHostiles(); this.clearMines(); this.gems.clear();
+    for (const e of this.enemies) e.destroy(); this.enemies = []; this.shots.clear(); this.clearHostiles(); this.clearMines(); this.clearMortars(); this.gems.clear();
     patchHud({ hp: 0, swarm: 0, playing: false, dead: true, waveClear: false, gold: this.gold, goldDisplay: this.gold, totalGoldEarned: this.totalGoldEarned, nextWaveBank: this.nextWaveBank });
   }
 
@@ -390,13 +428,39 @@ export class MainScene extends Phaser.Scene {
   }
 
   private plantMine(ev: FireEvent) {
-    const gfx = this.add.circle(ev.x, ev.y, 8, ev.color, 0.95); gfx.setStrokeStyle(2, 0xffffff, 0.85); gfx.setDepth(14);
-    this.mines.push({ gfx, x: ev.x, y: ev.y, r: ev.radius, damage: ev.damage, live: true });
+    const gfx = this.add.circle(ev.x, ev.y, 8, 0x6b7280, 0.55);
+    gfx.setStrokeStyle(2, 0x9ca3af, 0.7);
+    gfx.setDepth(14);
+    this.mines.push({
+      gfx,
+      x: ev.x,
+      y: ev.y,
+      r: ev.radius,
+      damage: ev.damage,
+      live: true,
+      armedAt: this.time.now + 2000,
+    });
   }
-  private tickMines() {
+  private tickMines(now: number) {
     for (const m of this.mines) {
       if (!m.live) continue;
-      for (const e of this.enemies) { if (e.alive && e.overlaps(m.x, m.y, m.r)) { this.detonateMine(m); break; } }
+      const armStart = m.armedAt - 2000;
+      const t = Phaser.Math.Clamp((now - armStart) / 2000, 0, 1);
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(0x6b7280),
+        Phaser.Display.Color.ValueToColor(0xef4444),
+        100,
+        Math.round(t * 100),
+      );
+      m.gfx.setFillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 0.45 + t * 0.55);
+      m.gfx.setStrokeStyle(2, t >= 1 ? 0xffe4e6 : 0x9ca3af, 0.7 + t * 0.25);
+      if (now < m.armedAt) continue;
+      for (const e of this.enemies) {
+        if (e.alive && e.overlaps(m.x, m.y, m.r)) {
+          this.detonateMine(m);
+          break;
+        }
+      }
     }
     this.mines = this.mines.filter((m) => m.live);
   }
@@ -408,6 +472,68 @@ export class MainScene extends Phaser.Scene {
     m.gfx.destroy();
   }
   private clearMines() { for (const m of this.mines) m.gfx.destroy(); this.mines = []; }
+
+  private launchMortar(ev: FireEvent) {
+    const tx = ev.tx ?? ev.x;
+    const ty = ev.ty ?? ev.y;
+    const gfx = this.add.circle(ev.x, ev.y, 6, COLOR.mortar, 0.95);
+    gfx.setStrokeStyle(2, 0xbbf7d0, 0.9);
+    gfx.setDepth(17);
+    const mark = this.add.circle(tx, ty, 10, COLOR.mortar, 0);
+    mark.setStrokeStyle(1.5, COLOR.mortar, 0.7);
+    mark.setDepth(9);
+    this.tweens.add({ targets: mark, alpha: 0.25, duration: 900, yoyo: true, repeat: 2, onComplete: () => mark.destroy() });
+    this.mortars.push({
+      gfx,
+      x: ev.x,
+      y: ev.y,
+      tx,
+      ty,
+      speed: 190,
+      damage: ev.damage,
+      aoe: ev.aoe ?? 78,
+      live: true,
+    });
+  }
+  private tickMortars(dt: number) {
+    for (const s of this.mortars) {
+      if (!s.live) continue;
+      const dx = s.tx - s.gfx.x;
+      const dy = s.ty - s.gfx.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= Math.max(6, s.speed * dt)) {
+        this.detonateMortar(s);
+        continue;
+      }
+      s.gfx.x += (dx / dist) * s.speed * dt;
+      s.gfx.y += (dy / dist) * s.speed * dt;
+    }
+    this.mortars = this.mortars.filter((s) => s.live);
+  }
+  private detonateMortar(s: MortarShell) {
+    s.live = false;
+    const x = s.tx;
+    const y = s.ty;
+    s.gfx.destroy();
+    const blast = this.add.circle(x, y, 8, COLOR.mortar, 0.45);
+    blast.setStrokeStyle(3, 0xbbf7d0, 0.9);
+    blast.setDepth(16);
+    this.tweens.add({
+      targets: blast,
+      scale: Math.max(1, s.aoe / 8),
+      alpha: 0,
+      duration: 280,
+      ease: "Cubic.easeOut",
+      onComplete: () => blast.destroy(),
+    });
+    for (const e of this.enemies) {
+      if (e.alive && e.overlaps(x, y, s.aoe)) this.applyEnemyHit(e, s.damage);
+    }
+  }
+  private clearMortars() {
+    for (const s of this.mortars) s.gfx.destroy();
+    this.mortars = [];
+  }
   private applyAura(ev: FireEvent) { for (const e of this.enemies) if (e.alive && e.overlaps(ev.x, ev.y, ev.radius)) this.applyEnemyHit(e, ev.damage); }
   private applyChain(ev: FireEvent) {
     const used = new Set<Enemy>(); let cx = ev.x, cy = ev.y; const hops = ev.bounces ?? 3, reach = ev.bounceRadius ?? 170;
@@ -434,12 +560,12 @@ export class MainScene extends Phaser.Scene {
   private beginLevelUp() {
     this.leveling = true; this.player.fullHeal(); this.playerHp = this.player.headMaxHp;
     try { this.physics?.world?.pause(); } catch { /* optional */ }
-    const offers = rollLevelOffers(); setLevelOffers(offers);
+    const offers = rollLevelOffers(Date.now(), { mineTier: this.player.mineTier() }); setLevelOffers(offers);
     patchHud({ leveling: true, levelOffers: offers, hp: this.playerHp, maxHp: this.player.headMaxHp, playerLevel: this.playerLevel, xp: this.xp, xpNextLevel: this.xpNextLevel });
   }
-  private resolveLevelUp(stat: GlobalStatId | null, weaponType: WeaponType | null = null) {
+  private resolveLevelUp(stat: GlobalStatId | null, weaponType: WeaponType | null = null, slot: WeaponSlot | null = null) {
     try {
-      if (weaponType) this.player.grantWeapon(weaponType);
+      if (weaponType) this.player.grantWeapon(weaponType, slot ?? undefined);
       if (stat) {
         const hpGain = this.player.applyGlobalStat(stat);
         if (hpGain > 0) this.playerHp = Math.min(this.player.headMaxHp, this.playerHp + hpGain);
@@ -450,6 +576,7 @@ export class MainScene extends Phaser.Scene {
     try { this.physics?.world?.resume(); } catch { /* optional */ }
     patchHud({ leveling: false, levelOffers: [], hp: this.playerHp, maxHp: this.player.headMaxHp, playerLevel: this.playerLevel, xp: this.xp, xpNextLevel: this.xpNextLevel, speed: Math.round(this.player.speed), segments: this.player.segments.length });
   }
+
   private floatPickup(x: number, y: number, label: string, fever: boolean) {
     const t = this.add.text(x, y, label, { fontFamily: "IBM Plex Mono, monospace", fontSize: fever ? "16px" : "14px", color: fever ? "#f4d35e" : "#5eead4" });
     t.setOrigin(0.5); t.setDepth(31);
@@ -487,7 +614,7 @@ export class MainScene extends Phaser.Scene {
   private onResize(_gameSize: Phaser.Structs.Size) { this.fitZoom(); }
   private cleanup() {
     this.scale.off("resize", this.onResize, this); this.unbindKeys?.(); this.unbindKeys = null;
-    this.shots?.destroy(); this.gems?.destroy(); this.clearHostiles(); this.clearMines();
+    this.shots?.destroy(); this.gems?.destroy(); this.clearHostiles(); this.clearMines(); this.clearMortars();
     for (const e of this.enemies) e.destroy(); this.enemies = []; this.player?.destroy();
     window.__gameReady = false; window.__controlsTest = undefined;
   }
