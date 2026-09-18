@@ -19,6 +19,7 @@ Last shipped: **per-segment independent targeting** on `main` (each trailing seg
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
+- Segment weapons: each trailing segment is an independent party member. Targeting and shots use **that segment's (x, y)** only — never head position or facing.
 - `SnakePlayer` owns player, trail, weapons, `heal()`, pickup radius, segment vacuum. `MainScene` owns enemies, bullets, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand).
 - Phaser: `import * as Phaser from "phaser"`.
