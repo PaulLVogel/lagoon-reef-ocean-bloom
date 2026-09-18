@@ -14,7 +14,7 @@ import { Enemy } from "./Enemy";
 import { installControlsTest } from "./controlsTest";
 import { isGameStarted, installKeyboard, sampleMove } from "./input";
 import { Projectiles } from "./Projectiles";
-import { patchHud } from "./runtime";
+import { patchHud, runtime } from "./runtime";
 import { SnakePlayer } from "./SnakePlayer";
 
 export class MainScene extends Phaser.Scene {
@@ -66,11 +66,19 @@ export class MainScene extends Phaser.Scene {
       maxHp: 100,
       kills: 0,
       swarm: 0,
+      dead: false,
     });
   }
 
   update(time: number, delta: number) {
-    if (this.dead) return;
+    if (this.dead) {
+      const bucket = runtime();
+      if (bucket.restartRequested) {
+        bucket.restartRequested = false;
+        this.scene.restart();
+      }
+      return;
+    }
     const dt = Math.min(delta, 50) / 1000;
     const move = sampleMove();
     const combatOn = isGameStarted();
@@ -195,10 +203,11 @@ export class MainScene extends Phaser.Scene {
 
   private onDead() {
     this.dead = true;
+    runtime().started = false;
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
-    patchHud({ hp: 0, swarm: 0 });
+    patchHud({ hp: 0, swarm: 0, playing: false, dead: true });
   }
 
   private pruneDead() {
