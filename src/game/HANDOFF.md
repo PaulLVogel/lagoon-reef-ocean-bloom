@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **Shop cost hook** on `main` (purchase-history ×1.5, 5g reroll, rarity weights, 10% bank interest).
+Last shipped: **Shop skip hook** on `main` (tactical skip, priced-out pity +10 HP / +2g, freeze offers, gray cards + green Next Wave pulse).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
@@ -33,10 +33,10 @@ Last shipped: **Shop cost hook** on `main` (purchase-history ×1.5, 5g reroll, r
 | `src/game/Weapon.ts` | `Weapon` / `FireEvent` / default loadout |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, `spawnFromKill`, collect+Fever+blip |
 | `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum, `collectHead` |
-| `src/game/shop.ts` | catalog + rarity + `scaledOfferCost` + `rollShopOffers` + `bankInterest` |
+| `src/game/shop.ts` | catalog + rarity + `scaledOfferCost` + `rollShopOffers` + `offersFromKinds` + `canAffordAny` + `bankInterest` + pity constants |
 | `src/game/Enemy.ts` | purple chasers (`hp` / `maxHp` for gem tier) |
 | `src/game/Projectiles.ts` | bullet pool + `clear()` |
-| `src/game/runtime.ts` | HUD snap, `purchaseHistory`, `pickShopOffer()`, `requestReroll()`, `requestNextWave()` |
+| `src/game/runtime.ts` | HUD snap, `purchaseHistory`, freeze, `pickShopOffer()`, `requestReroll()`, `requestToggleFreeze()`, `requestNextWave()` |
 | `src/game/constants.ts` | tunables including gem values, pickup radius, combo window |
 | `src/components/game-overlay.tsx` | start / HUD clock / gold / fever / death / shop |
 
@@ -72,4 +72,8 @@ Collect → `gems.collectHead(player.x, player.y, dt, { pickupRadius, segments, 
 - Reroll: persistent shop button, flat 5g (`SHOP_REROLL_COST`). `requestReroll()` deducts gold; MainScene calls `rollShop()` again. Blocked after a pick or if gold < 5.
 - Rarity weights: Common 70% / Rare 25% / Legendary 5%. Legendary offers (Coil vacuum, Add 2 Blaster Segments) use `.shop-legend` glow in the overlay.
 - Interest: leftover gold banks `floor(gold * 0.1)` in `startNextWave`. Next Wave is allowed without a pick so players can hoard toward a Legendary.
+- Tactical skip: `requestNextWave` works even when something is affordable.
+- Pity: skip while `canAffordAny` is false → +10 HP (cap 100) and +2g after interest.
+- Freeze: lock the current 3 kinds; next shop rebuilds them (`offersFromKinds`) with wave-scaled costs. Reroll off while frozen. Pick or Restart clears freeze.
+- Priced-out UI: gray cards + pulsing green Next Wave (`.shop-next-pulse`).
 - While `waveClear`, HUD tick must not overwrite shop-deducted / reroll-deducted gold.
