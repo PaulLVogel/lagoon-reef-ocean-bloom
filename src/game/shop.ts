@@ -7,7 +7,8 @@ export type ShopKind =
   | "turret_dmg"
   | "heal"
   | "pickup_radius"
-  | "segment_vacuum";
+  | "segment_vacuum"
+  | "credit_card";
 
 export type ShopRarity = "common" | "rare" | "legendary";
 
@@ -86,6 +87,13 @@ const CATALOG: CatalogItem[] = [
     cost: 88,
     rarity: "legendary",
   },
+  {
+    kind: "credit_card",
+    title: "Credit card",
+    blurb: "Overdraft: +2 blaster segments and +18% speed now. Gold may go negative. No interest while in debt.",
+    cost: 48,
+    rarity: "rare",
+  },
 ];
 
 export const MAX_SEGMENTS = 14;
@@ -133,6 +141,7 @@ export function rollShopOffers(
     if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS) return false;
     if (c.kind === "add_2_blasters" && segments + 2 > MAX_SEGMENTS) return false;
     if (c.kind === "segment_vacuum" && owned.segmentVacuum) return false;
+    if (c.kind === "credit_card" && purchasesOf(history, "credit_card") > 0) return false;
     return true;
   });
 
@@ -154,8 +163,17 @@ export function rollShopOffers(
   return offers;
 }
 
+export function allowsOverdraft(kind: ShopKind) {
+  return kind === "credit_card";
+}
+
+export function canAffordOffer(gold: number, offer: ShopOffer) {
+  if (allowsOverdraft(offer.kind)) return true;
+  return gold >= offer.cost;
+}
+
 export function canAffordAny(gold: number, offers: ShopOffer[]) {
-  return offers.some((o) => gold >= o.cost);
+  return offers.some((o) => canAffordOffer(gold, o));
 }
 
 export function offersFromKinds(
