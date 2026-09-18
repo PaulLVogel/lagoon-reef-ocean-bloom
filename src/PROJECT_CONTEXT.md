@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Phase 6 collect hook** on `main` (pickup radius, segment vacuum, float+blip, Fever combo).
+Last shipped: **Shop cost hook** on `main` (purchase-history ×1.5, 5g reroll, rarity weights, 10% bank interest).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -75,6 +75,11 @@ Collect hook: pickup radius larger than head hitbox (shop `pickup_radius`), high
 - Magnet: `Gems.activateMagnet()` flies live gems to the head.
 - Feedback: `floatPickup` 500ms + WebAudio sine blip in `MainScene`.
 - Fever: >10 gem pickups in `COMBO_WINDOW_MS` (2000). Subsequent gems ×2 until `feverUntil` elapses (refreshed by further Fever-window picks). HUD `fever` / `combo`.
-- Shop cost: `ShopOffer.cost`; `pickShopOffer` deducts `hud.gold`.
-- Skip: `requestNextWave` allowed without a pick if `canAffordAny` is false.
-- HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted).
+- Shop cost: `ShopOffer.cost`; `pickShopOffer` deducts `hud.gold` and appends `kind` to `purchaseHistory`.
+- Repeat buy: `scaledOfferCost` = `round(base * 1.5^purchasesOf(kind) * waveScale)`.
+- Reroll: shop button, flat `SHOP_REROLL_COST` (5g). `requestReroll()` deducts gold, MainScene `rollShop()` rolls 3 new offers. Disabled after a pick or if gold < 5.
+- Rarity: Common 70% / Rare 25% / Legendary 5%. Legendary cards use `.shop-legend` glow. New legendary `add_2_blasters`.
+- Interest: leftover gold (after buy or skip) gets `bankInterest` = `floor(gold * 0.1)` in `startNextWave`. Next Wave is allowed without a pick so players can bank.
+- Skip: `requestNextWave` allowed during shop even if offers are affordable (bank path).
+- HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted / rerolled).
+- Death Restart zeros gold **and** `purchaseHistory`.
