@@ -40,76 +40,16 @@ export type ShopOffer = {
 type CatalogItem = Omit<ShopOffer, "id">;
 
 const CATALOG: CatalogItem[] = [
-  {
-    kind: "heal",
-    title: "Mend scales",
-    blurb: "Restore 30 HP, capped at max.",
-    cost: 12,
-    rarity: "common",
-  },
-  {
-    kind: "turret_rate",
-    title: "Turret Rate +1",
-    blurb: "Aiming mounts cycle 20% faster.",
-    cost: 20,
-    rarity: "common",
-  },
-  {
-    kind: "blaster_rate",
-    title: "Blaster cadence",
-    blurb: "Forward guns cycle 20% faster.",
-    cost: 20,
-    rarity: "common",
-  },
-  {
-    kind: "pickup_radius",
-    title: "Wide maw",
-    blurb: "Head pickup circle grows. Gems vacuum from farther out.",
-    cost: 22,
-    rarity: "common",
-  },
-  {
-    kind: "turret_dmg",
-    title: "Turret cores",
-    blurb: "Seeking shots deal +3 damage.",
-    cost: 24,
-    rarity: "rare",
-  },
-  {
-    kind: "snake_speed",
-    title: "Coil speed",
-    blurb: "Head moves 18% faster. Trail keeps the same stride.",
-    cost: 28,
-    rarity: "rare",
-  },
-  {
-    kind: "add_blaster",
-    title: "New weapon segment",
-    blurb: "Grow the tail with one rolled weapon, or merge a duplicate up a tier.",
-    cost: 36,
-    rarity: "rare",
-  },
-  {
-    kind: "segment_vacuum",
-    title: "Coil vacuum",
-    blurb: "High-tier: segments pull nearby gems toward the head.",
-    cost: 52,
-    rarity: "legendary",
-  },
-  {
-    kind: "add_2_blasters",
-    title: "Add 2 weapon segments",
-    blurb: "Legendary: two rolled weapons, each merging if you already own the type.",
-    cost: 88,
-    rarity: "legendary",
-  },
-  {
-    kind: "credit_card",
-    title: "Credit card",
-    blurb: "Overdraft: +2 rolled weapons and +18% speed now. Gold may go negative.",
-    cost: 48,
-    rarity: "rare",
-  },
+  { kind: "heal", title: "Mend scales", blurb: "Restore 30 HP, capped at max.", cost: 12, rarity: "common" },
+  { kind: "turret_rate", title: "Turret Rate +1", blurb: "Aiming mounts cycle 20% faster.", cost: 20, rarity: "common" },
+  { kind: "blaster_rate", title: "Blaster cadence", blurb: "Forward guns cycle 20% faster.", cost: 20, rarity: "common" },
+  { kind: "pickup_radius", title: "Wide maw", blurb: "Head pickup circle grows. Gems vacuum from farther out.", cost: 22, rarity: "common" },
+  { kind: "turret_dmg", title: "Turret cores", blurb: "Seeking shots deal +3 damage.", cost: 24, rarity: "rare" },
+  { kind: "snake_speed", title: "Coil speed", blurb: "Head moves 18% faster. Trail keeps the same stride.", cost: 28, rarity: "rare" },
+  { kind: "add_blaster", title: "New weapon segment", blurb: "Grow the tail with one rolled weapon, or merge a duplicate up a tier.", cost: 36, rarity: "rare" },
+  { kind: "segment_vacuum", title: "Coil vacuum", blurb: "High-tier: segments pull nearby gems toward the head.", cost: 52, rarity: "legendary" },
+  { kind: "add_2_blasters", title: "Add 2 weapon segments", blurb: "Legendary: two rolled weapons, each merging if you already own the type.", cost: 88, rarity: "legendary" },
+  { kind: "credit_card", title: "Credit card", blurb: "Overdraft: +2 rolled weapons and +18% speed now. Gold may go negative.", cost: 48, rarity: "rare" },
   ...GLOBAL_STAT_CATALOG.map((s) => ({
     kind: (`stat_${s.stat === "pickup_radius" ? "pickup" : s.stat}`) as ShopKind,
     title: s.shopTitle,
@@ -120,6 +60,7 @@ const CATALOG: CatalogItem[] = [
 ];
 
 export const MAX_SEGMENTS = 14;
+export const SHOP_SLOTS = 6;
 export const SHOP_REROLL_COST = 5;
 export const SHOP_INTEREST_RATE = 0.1;
 export const SHOP_COST_GROWTH = 1.5;
@@ -191,7 +132,7 @@ export function rollShopOffers(
   segments: number,
   owned: ShopOwned = {},
   history: ShopKind[] = [],
-  held: (ShopOffer | null)[] = [null, null, null],
+  held: (ShopOffer | null)[] = Array.from({ length: SHOP_SLOTS }, () => null),
 ): ShopOffer[] {
   const pool = CATALOG.filter((c) => {
     if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS && !owned.canMerge) return false;
@@ -207,18 +148,10 @@ export function rollShopOffers(
   }
 
   const offers: ShopOffer[] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < SHOP_SLOTS; i++) {
     const kept = held[i];
     if (kept) {
-      const item = CATALOG.find((c) => c.kind === kept.kind) ?? kept;
-      const deco = kept.kind === "add_blaster" && kept.weaponType
-        ? { ...item, weaponType: kept.weaponType, merge: kept.merge, mergeToTier: kept.mergeToTier, title: kept.title, blurb: kept.blurb }
-        : item;
-      offers.push({
-        ...deco,
-        cost: scaledOfferCost(item.cost, wave, purchasesOf(history, item.kind)),
-        id: `${item.kind}-w${wave}-held-${i}`,
-      });
+      offers.push({ ...kept });
       continue;
     }
     const rarity = rollRarity();
