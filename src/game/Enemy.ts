@@ -87,6 +87,7 @@ export class Enemy {
     if (now >= this.nextVolley) {
       this.nextVolley = now + 1600;
       const n = 8;
+      const shotMul = Math.max(1, this.contact / 22);
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + now * 0.0004;
         shots.push({
@@ -94,7 +95,7 @@ export class Enemy {
           y: this.y + Math.sin(a) * (this.radius + 8),
           vx: Math.cos(a) * 210,
           vy: Math.sin(a) * 210,
-          damage: 10,
+          damage: Math.max(10, Math.round(10 * shotMul)),
         });
       }
       const aim = Math.atan2(ty - this.y, tx - this.x);
@@ -103,7 +104,7 @@ export class Enemy {
         y: this.y + Math.sin(aim) * (this.radius + 10),
         vx: Math.cos(aim) * 280,
         vy: Math.sin(aim) * 280,
-        damage: 14,
+        damage: Math.max(14, Math.round(14 * shotMul)),
       });
     }
     return shots;

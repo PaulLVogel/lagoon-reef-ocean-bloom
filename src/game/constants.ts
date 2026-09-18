@@ -16,12 +16,6 @@ export const BASE_SPEED = 240;
 export const PLAYER_MAX_HP = 100;
 export const SEGMENT_MAX_HP = 100;
 
-/** Phaser spritesheet key for the halfling bard head (16×16 × 4 walk frames). */
-export const BARD_SHEET = "vs-bard";
-export const BARD_FRAME_SIZE = 16;
-/** Integer nearest-neighbor scale (16×4 = 64px). Hitbox stays HEAD_RADIUS. */
-export const BARD_SCALE = 4;
-
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
 export const BULLET_POOL = 96;
@@ -36,7 +30,14 @@ export const SPAWN_INTERVAL_MIN_MS = 280;
 export const PLAYER_IFRAME_MS = 450;
 
 export const WAVE_DURATION_MS = 30_000;
+/** Boss every N waves (10, 20, 30…). Kept as the period, not a single-wave id. */
 export const BOSS_WAVE = 10;
+/** Era = floor((wave-1)/BOSS_WAVE). Each new era multiplies horde HP/dmg and tightens spawn. */
+export const ERA_HORDE_MUL = 1.75;
+export const ERA_SPAWN_MUL = 1.35;
+/** Extra boss HP/contact per era on top of the linear wave curve. */
+export const ERA_BOSS_HP_MUL = 2.1;
+export const ERA_BOSS_DMG_MUL = 1.65;
 
 export const GEM_POOL = 80;
 export const GEM_RADIUS = 7;
