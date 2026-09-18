@@ -1,5 +1,6 @@
-import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS } from "./constants";
+import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS, xpForLevel } from "./constants";
 import { allowsOverdraft, SHOP_REROLL_COST, type ShopKind, type ShopOffer } from "./shop";
+import type { GlobalStatId, LevelOffer } from "./stats";
 import type { WeaponType } from "./Weapon";
 
 export type HudSnap = {
@@ -30,6 +31,11 @@ export type HudSnap = {
   slotLocked: boolean[];
   lastPityHp: number;
   lastPityGold: number;
+  leveling: boolean;
+  playerLevel: number;
+  xp: number;
+  xpNextLevel: number;
+  levelOffers: LevelOffer[];
 };
 
 type Bucket = {
@@ -54,6 +60,9 @@ type Bucket = {
   stickY: number;
   keys: Set<string>;
   listeners: Set<(s: HudSnap) => void>;
+  leveling: boolean;
+  pendingLevelStat: GlobalStatId | null;
+  levelOffers: LevelOffer[];
 };
 
 const emptyLocks = () => [false, false, false];
@@ -83,69 +92,61 @@ const emptyHud = (): HudSnap => ({
   slotLocked: emptyLocks(),
   lastPityHp: 0,
   lastPityGold: 0,
+  leveling: false,
+  playerLevel: 1,
+  xp: 0,
+  xpNextLevel: xpForLevel(1),
+  levelOffers: [],
 });
 
-const fallback: Bucket = {
-  snap: emptyHud(),
-  started: false,
-  restartRequested: false,
-  nextWaveRequested: false,
-  rerollRequested: false,
-  pendingUpgrade: null,
-  pendingWeaponType: null,
-  shopOffers: [],
-  shopPicked: null,
-  purchaseHistory: [],
-  shopFrozen: false,
-  frozenKinds: [null, null, null],
-  slotLocked: emptyLocks(),
-  goldTallyFrom: null,
-  nextWaveBank: 0,
-  totalGoldEarned: 0,
-  injected: null,
-  stickX: 0,
-  stickY: 0,
-  keys: new Set(),
-  listeners: new Set(),
-};
+function emptyBucket(): Bucket {
+  return {
+    snap: emptyHud(),
+    started: false,
+    restartRequested: false,
+    nextWaveRequested: false,
+    rerollRequested: false,
+    pendingUpgrade: null,
+    pendingWeaponType: null,
+    shopOffers: [],
+    shopPicked: null,
+    purchaseHistory: [],
+    shopFrozen: false,
+    frozenKinds: [null, null, null],
+    slotLocked: emptyLocks(),
+    goldTallyFrom: null,
+    nextWaveBank: 0,
+    totalGoldEarned: 0,
+    injected: null,
+    stickX: 0,
+    stickY: 0,
+    keys: new Set(),
+    listeners: new Set(),
+    leveling: false,
+    pendingLevelStat: null,
+    levelOffers: [],
+  };
+}
+
+const fallback: Bucket = emptyBucket();
 
 export function runtime(): Bucket {
   if (typeof window === "undefined") return fallback;
   const w = window as Window & { __vsRuntime?: Bucket };
-  if (!w.__vsRuntime) {
-    w.__vsRuntime = {
-      snap: emptyHud(),
-      started: false,
-      restartRequested: false,
-      nextWaveRequested: false,
-      rerollRequested: false,
-      pendingUpgrade: null,
-      pendingWeaponType: null,
-      shopOffers: [],
-      shopPicked: null,
-      purchaseHistory: [],
-      shopFrozen: false,
-      frozenKinds: [null, null, null],
-      slotLocked: emptyLocks(),
-      goldTallyFrom: null,
-      nextWaveBank: 0,
-      totalGoldEarned: 0,
-      injected: null,
-      stickX: 0,
-      stickY: 0,
-      keys: new Set(),
-      listeners: new Set(),
-    };
-  }
-  if (!w.__vsRuntime.purchaseHistory) w.__vsRuntime.purchaseHistory = [];
-  if (!w.__vsRuntime.frozenKinds) w.__vsRuntime.frozenKinds = [null, null, null];
-  if (!w.__vsRuntime.slotLocked) w.__vsRuntime.slotLocked = emptyLocks();
-  if (typeof w.__vsRuntime.shopFrozen !== "boolean") w.__vsRuntime.shopFrozen = false;
-  if (typeof w.__vsRuntime.nextWaveBank !== "number") w.__vsRuntime.nextWaveBank = 0;
-  if (typeof w.__vsRuntime.totalGoldEarned !== "number") w.__vsRuntime.totalGoldEarned = 0;
-  if (w.__vsRuntime.goldTallyFrom === undefined) w.__vsRuntime.goldTallyFrom = null;
-  if (w.__vsRuntime.pendingWeaponType === undefined) w.__vsRuntime.pendingWeaponType = null;
-  return w.__vsRuntime;
+  if (!w.__vsRuntime) w.__vsRuntime = emptyBucket();
+  const b = w.__vsRuntime;
+  if (!b.purchaseHistory) b.purchaseHistory = [];
+  if (!b.frozenKinds) b.frozenKinds = [null, null, null];
+  if (!b.slotLocked) b.slotLocked = emptyLocks();
+  if (typeof b.shopFrozen !== "boolean") b.shopFrozen = false;
+  if (typeof b.nextWaveBank !== "number") b.nextWaveBank = 0;
+  if (typeof b.totalGoldEarned !== "number") b.totalGoldEarned = 0;
+  if (b.goldTallyFrom === undefined) b.goldTallyFrom = null;
+  if (b.pendingWeaponType === undefined) b.pendingWeaponType = null;
+  if (typeof b.leveling !== "boolean") b.leveling = false;
+  if (b.pendingLevelStat === undefined) b.pendingLevelStat = null;
+  if (!b.levelOffers) b.levelOffers = [];
+  return b;
 }
 
 export function getHud(): HudSnap {
@@ -187,12 +188,16 @@ export function requestRestart() {
   b.goldTallyFrom = null;
   b.nextWaveBank = 0;
   b.totalGoldEarned = 0;
+  b.leveling = false;
+  b.pendingLevelStat = null;
+  b.levelOffers = [];
   b.started = true;
   patchHud({
     playing: true,
     dead: false,
     waveClear: false,
     hp: 100,
+    maxHp: 100,
     swarm: 0,
     kills: 0,
     gold: 0,
@@ -210,6 +215,11 @@ export function requestRestart() {
     slotLocked: emptyLocks(),
     lastPityHp: 0,
     lastPityGold: 0,
+    leveling: false,
+    playerLevel: 1,
+    xp: 0,
+    xpNextLevel: xpForLevel(1),
+    levelOffers: [],
   });
 }
 
@@ -257,7 +267,6 @@ export function requestReroll() {
   b.rerollRequested = true;
 }
 
-/** Per-card lock. Locked slots survive reroll and the next shop. */
 export function requestToggleSlotLock(index: number) {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
@@ -291,4 +300,23 @@ export function requestNextWave() {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
   b.nextWaveRequested = true;
+}
+
+export function setLevelOffers(offers: LevelOffer[]) {
+  const b = runtime();
+  b.leveling = true;
+  b.levelOffers = offers;
+  b.pendingLevelStat = null;
+  patchHud({ leveling: true, levelOffers: offers });
+}
+
+export function pickLevelOffer(id: string) {
+  const b = runtime();
+  if (!b.leveling) return;
+  const offer = b.levelOffers.find((o) => o.id === id);
+  if (!offer) return;
+  b.pendingLevelStat = offer.stat;
+  b.leveling = false;
+  b.levelOffers = [];
+  patchHud({ leveling: false, levelOffers: [] });
 }
