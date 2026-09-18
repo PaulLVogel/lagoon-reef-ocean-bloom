@@ -17,6 +17,7 @@ import { installControlsTest } from "./controlsTest";
 import { isGameStarted, installKeyboard, sampleMove } from "./input";
 import { Projectiles } from "./Projectiles";
 import { patchHud, runtime } from "./runtime";
+import { rollShopOffers, type ShopKind } from "./shop";
 import { SnakePlayer } from "./SnakePlayer";
 
 export class MainScene extends Phaser.Scene {
@@ -29,6 +30,7 @@ export class MainScene extends Phaser.Scene {
   private kills = 0;
   private dead = false;
   private waveClear = false;
+  private wave = 1;
   private waveMs = WAVE_DURATION_MS;
   private hudAcc = 0;
   private unbindKeys: (() => void) | null = null;
@@ -46,6 +48,7 @@ export class MainScene extends Phaser.Scene {
     this.kills = 0;
     this.dead = false;
     this.waveClear = false;
+    this.wave = 1;
     this.waveMs = WAVE_DURATION_MS;
     this.enemies = [];
   }
@@ -76,6 +79,8 @@ export class MainScene extends Phaser.Scene {
       waveClear: false,
       waveMs: WAVE_DURATION_MS,
       wave: 1,
+      shopOffers: [],
+      shopPicked: null,
     });
   }
 
@@ -85,6 +90,18 @@ export class MainScene extends Phaser.Scene {
       if (bucket.restartRequested) {
         bucket.restartRequested = false;
         this.scene.restart();
+        return;
+      }
+      if (this.waveClear && !this.dead) {
+        if (bucket.pendingUpgrade) {
+          const kind = bucket.pendingUpgrade;
+          bucket.pendingUpgrade = null;
+          this.applyUpgrade(kind);
+        }
+        if (bucket.nextWaveRequested) {
+          bucket.nextWaveRequested = false;
+          this.startNextWave();
+        }
       }
       if (this.dead) return;
     }
@@ -132,6 +149,7 @@ export class MainScene extends Phaser.Scene {
           swarm: this.livingCount(),
           waveMs: this.waveMs,
           waveClear: this.waveClear,
+          wave: this.wave,
         });
       }
     }
@@ -148,11 +166,68 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
+    const offers = rollShopOffers(this.wave, this.player.segments.length);
+    const bucket = runtime();
+    bucket.shopOffers = offers;
+    bucket.shopPicked = null;
+    bucket.pendingUpgrade = null;
+    bucket.nextWaveRequested = false;
     patchHud({
       waveMs: 0,
       swarm: 0,
       waveClear: true,
       playing: true,
+      wave: this.wave,
+      shopOffers: offers,
+      shopPicked: null,
+      segments: this.player.segments.length,
+      hp: this.playerHp,
+      kills: this.kills,
+    });
+  }
+
+  private startNextWave() {
+    this.wave += 1;
+    this.waveMs = WAVE_DURATION_MS;
+    this.waveClear = false;
+    this.spawnAcc = 0;
+    const bucket = runtime();
+    bucket.shopOffers = [];
+    bucket.shopPicked = null;
+    bucket.pendingUpgrade = null;
+    patchHud({
+      waveClear: false,
+      waveMs: WAVE_DURATION_MS,
+      wave: this.wave,
+      swarm: 0,
+      shopOffers: [],
+      shopPicked: null,
+      playing: true,
+      segments: this.player.segments.length,
+      hp: this.playerHp,
+      kills: this.kills,
+      speed: Math.round(this.player.speed),
+    });
+  }
+
+  private applyUpgrade(kind: ShopKind) {
+    if (kind === "add_blaster") {
+      this.player.addArmedSegment("blaster");
+    } else if (kind === "turret_rate") {
+      this.player.boostFireRate("turret", 0.8);
+    } else if (kind === "snake_speed") {
+      this.player.boostSpeed(1.18);
+    } else if (kind === "blaster_rate") {
+      this.player.boostFireRate("blaster", 0.8);
+    } else if (kind === "turret_dmg") {
+      this.player.boostDamage("turret", 3);
+    } else if (kind === "heal") {
+      this.playerHp = Math.min(100, this.playerHp + 30);
+    }
+    patchHud({
+      segments: this.player.segments.length,
+      hp: this.playerHp,
+      speed: Math.round(this.player.speed),
     });
   }
 

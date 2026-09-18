@@ -110,6 +110,38 @@ export class SnakePlayer {
     this.layoutSegments();
   }
 
+  addArmedSegment(type: Weapon["type"]) {
+    this.addSegment();
+    const segmentIndex = this.segments.length - 1;
+    const proto = defaultLoadout().find((w) => w.type === type);
+    this.weapons.push({
+      type,
+      segmentIndex,
+      fireRate: proto?.fireRate ?? 280,
+      lastFired: 0,
+      damage: proto?.damage ?? 6,
+    });
+    this.attachMount(segmentIndex, type);
+  }
+
+  boostFireRate(type: Weapon["type"], mul: number, floor = 140) {
+    for (const w of this.weapons) {
+      if (w.type !== type) continue;
+      w.fireRate = Math.max(floor, Math.round(w.fireRate * mul));
+    }
+  }
+
+  boostDamage(type: Weapon["type"], add: number) {
+    for (const w of this.weapons) {
+      if (w.type !== type) continue;
+      w.damage += add;
+    }
+  }
+
+  boostSpeed(mul: number, cap = 420) {
+    this.speed = Math.min(cap, this.speed * mul);
+  }
+
   update(dt: number, ax: number, ay: number, now: number, aim: AimPoint | null, combatOn: boolean) {
     const moving = ax !== 0 || ay !== 0;
     if (moving) {
@@ -186,18 +218,21 @@ export class SnakePlayer {
   }
 
   private attachMounts() {
-    const blasterSeg = this.segments[0];
-    if (blasterSeg) {
+    this.attachMount(0, "blaster");
+    this.attachMount(1, "turret");
+    this.attachMount(2, "blade");
+  }
+
+  private attachMount(index: number, type: Weapon["type"]) {
+    const seg = this.segments[index];
+    if (!seg) return;
+    if (type === "blaster") {
       const barrel = this.scene.add.rectangle(10, 0, 14, 5, COLOR.blaster);
-      blasterSeg.add(barrel);
-    }
-    const turretSeg = this.segments[1];
-    if (turretSeg) {
+      seg.add(barrel);
+    } else if (type === "turret") {
       const cup = this.scene.add.circle(0, 0, 6, COLOR.turret);
-      turretSeg.add(cup);
-    }
-    const bladeSeg = this.segments[2];
-    if (bladeSeg) {
+      seg.add(cup);
+    } else if (type === "blade") {
       const a = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
       const b = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
       a.setDepth(19);
