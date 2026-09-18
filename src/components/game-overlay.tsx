@@ -5,10 +5,17 @@ import {
   getHud,
   pickShopOffer,
   requestNextWave,
+  requestReroll,
   requestRestart,
   subscribeHud,
 } from "@/game/runtime";
-import { canAffordAny, type ShopKind, type ShopOffer } from "@/game/shop";
+import {
+  SHOP_INTEREST_RATE,
+  SHOP_REROLL_COST,
+  type ShopKind,
+  type ShopOffer,
+  type ShopRarity,
+} from "@/game/shop";
 import { cn } from "@/lib/cn";
 import { VirtualStick } from "./virtual-stick";
 
@@ -20,7 +27,7 @@ function formatClock(ms: number) {
 }
 
 function shopIcon(kind: ShopKind) {
-  if (kind === "add_blaster") return Plus;
+  if (kind === "add_blaster" || kind === "add_2_blasters") return Plus;
   if (kind === "turret_rate" || kind === "blaster_rate") return Gauge;
   if (kind === "snake_speed") return Zap;
   if (kind === "heal") return Heart;
@@ -43,15 +50,15 @@ export function GameOverlay() {
   const offers = hud.shopOffers ?? [];
   const picked = hud.shopPicked;
   const gold = hud.gold ?? 0;
-  const canBuy = canAffordAny(gold, offers);
-  const canContinue = Boolean(picked) || (offers.length > 0 && !canBuy);
+  const canReroll = !picked && gold >= SHOP_REROLL_COST;
+  const interestPreview = Math.floor(gold * SHOP_INTEREST_RATE);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
       <header className="flex items-start justify-between gap-3 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
         <div className="rounded-xl border border-border bg-surface/80 px-3 py-2 backdrop-blur-sm">
           <p className="font-display text-sm tracking-tight text-fg">Vampire Snake</p>
-          <p className="text-xs text-muted">Phase 6 · Wave {hud.wave ?? 1}</p>
+          <p className="text-xs text-muted">Wave {hud.wave ?? 1}</p>
         </div>
         <div className="flex flex-col items-center">
           <div
@@ -172,10 +179,13 @@ export function GameOverlay() {
               Shop
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Spend gold on one upgrade. Leftover carries. Gems vacuum at 00:00.
+              Buy one upgrade, reroll the board, or bank leftover gold for{" "}
+              {Math.round(SHOP_INTEREST_RATE * 100)}% interest next wave.
+              Repeat buys cost ×1.5.
             </p>
             <p className="mt-1 font-mono text-sm tabular-nums text-fg">
               {gold} gold · {hud.kills} kill{hud.kills === 1 ? "" : "s"}
+              {interestPreview > 0 ? ` · bank +${interestPreview}` : ""}
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               {offers.map((offer) => (
@@ -189,26 +199,34 @@ export function GameOverlay() {
                 />
               ))}
             </div>
-            {!canBuy && !picked ? (
-              <p className="mt-3 text-sm text-muted">
-                Not enough gold this round — skip to the next wave.
-              </p>
-            ) : null}
-            <button
-              type="button"
-              disabled={!canContinue}
-              onClick={() => requestNextWave()}
-              className={cn(
-                "mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl",
-                "text-sm font-medium transition-transform duration-(--motion-quick)",
-                canContinue
-                  ? "bg-fg text-bg hover:opacity-95 active:scale-[0.98]"
-                  : "cursor-not-allowed bg-surface text-muted",
-              )}
-            >
-              <Play className="size-4" strokeWidth={2} />
-              Next wave
-            </button>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={!canReroll}
+                onClick={() => requestReroll()}
+                className={cn(
+                  "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl",
+                  "text-sm font-medium transition-transform duration-(--motion-quick)",
+                  canReroll
+                    ? "border border-border bg-surface text-fg hover:border-fg/30 active:scale-[0.98]"
+                    : "cursor-not-allowed border border-border bg-surface text-muted",
+                )}
+              >
+                Reroll options · {SHOP_REROLL_COST}g
+              </button>
+              <button
+                type="button"
+                onClick={() => requestNextWave()}
+                className={cn(
+                  "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl",
+                  "bg-fg text-sm font-medium text-bg transition-transform duration-(--motion-quick)",
+                  "hover:opacity-95 active:scale-[0.98]",
+                )}
+              >
+                <Play className="size-4" strokeWidth={2} />
+                {picked ? "Next wave" : "Bank & next wave"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -231,6 +249,8 @@ function ShopCard({
 }) {
   const Icon = shopIcon(offer.kind);
   const unaffordable = gold < offer.cost && !selected;
+  const rarity: ShopRarity = offer.rarity ?? "common";
+  const legendary = rarity === "legendary" && !selected;
   return (
     <button
       type="button"
@@ -240,13 +260,31 @@ function ShopCard({
         "flex min-h-[9.5rem] flex-col rounded-2xl border p-4 text-left transition-transform duration-(--motion-quick)",
         selected
           ? "border-blood bg-blood/15"
-          : "border-border bg-surface hover:border-fg/30",
+          : legendary
+            ? "shop-legend bg-surface"
+            : rarity === "rare"
+              ? "border-sky-400/40 bg-surface hover:border-sky-300/50"
+              : "border-border bg-surface hover:border-fg/30",
         locked || unaffordable ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <Icon className={cn("size-5", selected ? "text-blood" : "text-fg")} strokeWidth={1.75} />
-        <span className="font-mono text-xs tabular-nums text-muted">{offer.cost}g</span>
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className={cn(
+              "text-[10px] tracking-[0.14em] uppercase",
+              rarity === "legendary"
+                ? "text-amber-300"
+                : rarity === "rare"
+                  ? "text-sky-300"
+                  : "text-muted",
+            )}
+          >
+            {rarity}
+          </span>
+          <span className="font-mono text-xs tabular-nums text-muted">{offer.cost}g</span>
+        </div>
       </div>
       <p className="font-display mt-3 text-lg leading-tight text-fg">{offer.title}</p>
       <p className="mt-1 text-sm leading-relaxed text-muted">{offer.blurb}</p>
