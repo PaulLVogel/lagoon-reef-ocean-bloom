@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×3) on top of the weapon-pool overhaul (`main`).
+Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×4, `BARD_SCALE = 4`) on top of the weapon-pool overhaul (`main`).
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -25,6 +25,7 @@ Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-nei
 - `heldOffers()` copies `bucket.heldOffers[i]` first, then locked unbought `shopOffers[i]`.
 - **Flanker** and **Tangled** are **not** in this codebase. Do not add them unless the user names them as a new feature.
 - `areaOfEffect` exists on `SnakePlayer` (default 1) and scales mortar AoE. No shop/level card raises it yet.
+- The **head sprite is the halfling bard** (`public/sprites/halfling-bard.png`). `BARD_SCALE = 4`. Do **not** revert to the gold diamond or a train atlas unless the user asks.
 - When pushing: send **entire** files. Prefer `gh` clone + copy + `git push` for large sources. Truncated API payloads previously shipped only section 0 of this file.
 - After shipping: keep this file and `src/game/HANDOFF.md` in lockstep, then copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
@@ -33,7 +34,8 @@ Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-nei
 | Path | Role |
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
-| `src/game/constants.ts` | gold/head colors, mortar/rail/chain colors, bard sheet / scale |
+| `src/game/constants.ts` | gold/head colors, mortar/rail/chain colors, bard sheet / `BARD_SCALE = 4` |
+| `public/sprites/halfling-bard.png` | 16×16 × 4 walk strip (faces left) |
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
@@ -63,7 +65,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
 *   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`) and stops firing, but **still follows `positionHistory`**. **Do not draw floating health bars** (logic stays). Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, and firing. Head contact still damages player HP; segment contact damages that segment only.
-*   **Weapons:** Two pools. **HEAD** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the **halfling bard head** via `grantWeapon(type, "head")` — no new segment. The head graphic is the user-supplied bard sheet (`public/sprites/halfling-bard.png`, 16×16 × 4, integer scale 3, nearest-neighbor). Sheet faces left; flip when moving right. Pickup ring stays a circle. **SEGMENT** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) stay 1-to-1 on the trail. Head starts with `single_shot`. Dead segments cannot attack. Duplicates merge in **that slot** (tier 1–3). **Mine layer:** only one segment; T3 removes it from shop/level pools; cadence ignores global CDR (~3s); 2s arming fuse. **Mortar:** slow shell to a frozen (x,y), no travel damage, AoE on impact × `player.areaOfEffect`. Segment tint follows equipped weapon. Shop/level cards label **Head Upgrade** vs **New Segment**. Global stats use `SnakePlayer.applyGlobalStat`. Shop stat items still call `applyItemModifier`.
+*   **Weapons:** Two pools. **HEAD** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the **halfling bard head** via `grantWeapon(type, "head")` — no new segment. The head graphic is the user-supplied bard sheet (`public/sprites/halfling-bard.png`, 16×16 × 4, integer `BARD_SCALE = 4`, nearest-neighbor). Sheet faces left; flip when moving right. Pickup ring stays a circle. **SEGMENT** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) stay 1-to-1 on the trail. Head starts with `single_shot`. Dead segments cannot attack. Duplicates merge in **that slot** (tier 1–3). **Mine layer:** only one segment; T3 removes it from shop/level pools; cadence ignores global CDR (~3s); 2s arming fuse. **Mortar:** slow shell to a frozen (x,y), no travel damage, AoE on impact × `player.areaOfEffect`. Segment tint follows equipped weapon. Shop/level cards label **Head Upgrade** vs **New Segment**. Global stats use `SnakePlayer.applyGlobalStat`. Shop stat items still call `applyItemModifier`.
 *   **Assets:** Phaser geometric shapes, **plus** the bard spritesheet (user-requested PNG). Do not swap that sheet unless asked.
 *   **Scale / camera:** `createGame` uses `Phaser.Scale.FIT` + `CENTER_BOTH` at 1280×720. Mobile zoom is `MOBILE_ZOOM` (`2/3`) on `cameras.main` only. HUD/shop/HP/gold live in `game-overlay.tsx` (DOM) and must ignore camera zoom.
 *   **Enemies:** Three tiers (`swarmer` / `grunt` / `brute`) plus wave-10 `boss`. Do not collapse back to one purple chaser. HP/damage/spawn rate scale with wave. Wave 10 stops normal spawns and spawns one boss.
@@ -133,7 +135,7 @@ These shipped on `main` `ef12c07`. Treat as current truth.
 - `game-canvas.tsx` must not force canvas `h-full w-full` (that fights FIT letterboxing).
 
 ### Weapons / start / bars
-- Head is the **halfling bard** (`public/sprites/halfling-bard.png`). 16×16, 4-frame walk, scale 3, nearest-neighbor. Starts with `single_shot`. Additional **HEAD** weapons (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the head via `grantWeapon(type, "head")`.
+- Head is the **halfling bard** (`public/sprites/halfling-bard.png`). 16×16, 4-frame walk, `BARD_SCALE = 4`, nearest-neighbor. Starts with `single_shot`. Additional **HEAD** weapons (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the head via `grantWeapon(type, "head")`.
 - Pickup ring stays circular (container is not rotated). Sheet faces left; `flipX` when facing right.
 - **SEGMENT** weapons (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) are 1-to-1. `grantWeapon(type, "segment")` merges that slot or grows a segment.
 - Unique negative `segmentIndex` for each head gun so `tickWeapons` fires all of them.

@@ -19,14 +19,15 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 9. **Flanker** enemies and **Tangled** overlap penalty are **not** in this repo. GitHub search is empty. Do not invent them unless the user names them as a new feature.
 10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
+12. The **head is the halfling bard** (`public/sprites/halfling-bard.png`, 16×16 × 4, `BARD_SCALE = 4`, nearest-neighbor). Sheet faces left; `flipX` when moving right. Do **not** revert to the gold diamond or the train atlas unless the user asks.
 
-Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×3). Weapon-pool overhaul still live.
+Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×4, `main` `9a8ac9e` + this doc fix). Weapon-pool overhaul still live.
 
 ## Rules
 
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
 - Segment HP: starts at 100 (`segmentMaxHp` grows with Max HP stat). `isActive` false at 0 (no fire, tint `0x555555`). Logic stays; **do not draw floating health bars**. `reviveAll()` / `fullHeal()` restore HP. Dead segments do not take more damage. Head contact damages player HP; segment contact damages that segment only. Armor is flat reduction (`mitigate`, min 1).
-- Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** is the **halfling bard** spritesheet (`public/sprites/halfling-bard.png`, 16×16, 4-frame walk, integer scale 3, nearest-neighbor). Sheet faces left; `flipX` when moving right. Pickup ring stays a circle (head container is not rotated). Extra **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) still stack on the head without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
+- Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** is the **halfling bard** spritesheet (`public/sprites/halfling-bard.png`, 16×16, 4-frame walk, integer `BARD_SCALE = 4`, nearest-neighbor). Sheet faces left; `flipX` when moving right. Pickup ring stays a circle (head container is not rotated). Extra **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) still stack on the head without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
 - Segment weapons: each trailing **active** segment holds **exactly one** `Weapon`. Targeting and shots use **that origin (x, y)**. Dead segments do not fire. Head weapons all fire from the bard. No orbiting extras.
 - Weapon tiers: `Weapon.tier` is 1–3 (`WEAPON_TIER_CAP`). Duplicate buys `grantWeapon(type, slot)` merge the lowest-tier copy **in that slot**. Mine layer is unique: one segment only; T3 removes it from shop/level pools. Mine cadence **ignores** global CDR (3s, slight tier trim) and mines arm for 2s before colliding.
 - Mortar: fires a slow shell at the enemy's **frozen (x, y)**; no contact damage in flight; AoE on impact scales with `SnakePlayer.areaOfEffect`.
@@ -44,7 +45,8 @@ Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-nei
 | `src/game/SnakePlayer.ts` | head **halfling bard sprite**, trail, HP/grey-out, weapons + merge, `applyGlobalStat`, `fullHeal()`, armor, auras |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
 | `src/game/MainScene.ts` | FIT zoom, `preload` bard sheet, tiers + boss, mines (2s fuse), mortar shells, XP/level-up pause, **pendingBuys drain**, shop apply |
-| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **bard sheet / scale** |
+| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **bard sheet / `BARD_SCALE = 4`** |
+| `public/sprites/halfling-bard.png` | 16×16 × 4 walk strip (faces left). Preloaded in `MainScene`. |
 | `src/game/Gems.ts` | star gems + health/magnet, pop, magnetize, vacuum, `collectHead` |
 | `src/game/stats.ts` | 6 global stats + head/segment weapon offers in `rollLevelOffers` |
 | `src/game/shop.ts` | `SHOP_SLOTS = 6`, `add_head_weapon` + `add_blaster`, lock copies the offer object |
