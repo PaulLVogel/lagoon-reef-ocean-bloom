@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **Phase 6 collect hook** on `main` (pickup radius, segment vacuum, float+blip, Fever combo).
+Last shipped: **Shop cost hook** on `main` (purchase-history ×1.5, 5g reroll, rarity weights, 10% bank interest).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
@@ -33,10 +33,10 @@ Last shipped: **Phase 6 collect hook** on `main` (pickup radius, segment vacuum,
 | `src/game/Weapon.ts` | `Weapon` / `FireEvent` / default loadout |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, `spawnFromKill`, collect+Fever+blip |
 | `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum, `collectHead` |
-| `src/game/shop.ts` | catalog + costs + `rollShopOffers` + `canAffordAny` |
+| `src/game/shop.ts` | catalog + rarity + `scaledOfferCost` + `rollShopOffers` + `bankInterest` |
 | `src/game/Enemy.ts` | purple chasers (`hp` / `maxHp` for gem tier) |
 | `src/game/Projectiles.ts` | bullet pool + `clear()` |
-| `src/game/runtime.ts` | HUD snap (gold, fever, combo), `pickShopOffer()`, `requestNextWave()` |
+| `src/game/runtime.ts` | HUD snap, `purchaseHistory`, `pickShopOffer()`, `requestReroll()`, `requestNextWave()` |
 | `src/game/constants.ts` | tunables including gem values, pickup radius, combo window |
 | `src/components/game-overlay.tsx` | start / HUD clock / gold / fever / death / shop |
 
@@ -66,7 +66,10 @@ Collect → `gems.collectHead(player.x, player.y, dt, { pickupRadius, segments, 
 - Pop scatter: `vx/vy = Phaser.Math.Between(-50, 50)`, high drag (`GEM_DRAG`). Simulated on the gem pool, **not** on snake segments.
 - `collectHead` uses head x/y + pickup radius. Segments ignored for pickup.
 - Enemy HP scales with wave: `ENEMY_HP + (wave-1)*6 + random(0,10)` so blue/red appear later.
-- `endWave()` vacuums leftover **gems** into gold, then rolls 3 priced offers.
-- `pickShopOffer` deducts cost. Gold carries across waves. Restart zeros gold.
-- If nothing is affordable, Next Wave is allowed without a pick.
-- While `waveClear`, HUD tick must not overwrite shop-deducted gold.
+- `endWave()` vacuums leftover **gems** into gold, then `rollShop()` draws 3 rarity-weighted offers.
+- `pickShopOffer` deducts `offer.cost` and appends `kind` to `runtime().purchaseHistory`.
+- Repeat purchases: `scaledOfferCost(base, wave, bought)` = `round(base * 1.5^bought * waveScale)`. History is an array of `ShopKind`. Restart clears it.
+- Reroll: persistent shop button, flat 5g (`SHOP_REROLL_COST`). `requestReroll()` deducts gold; MainScene calls `rollShop()` again. Blocked after a pick or if gold < 5.
+- Rarity weights: Common 70% / Rare 25% / Legendary 5%. Legendary offers (Coil vacuum, Add 2 Blaster Segments) use `.shop-legend` glow in the overlay.
+- Interest: leftover gold banks `floor(gold * 0.1)` in `startNextWave`. Next Wave is allowed without a pick so players can hoard toward a Legendary.
+- While `waveClear`, HUD tick must not overwrite shop-deducted / reroll-deducted gold.

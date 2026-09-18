@@ -40,6 +40,28 @@
   }
 }
 
+.shop-legend {
+  border-color: #f4d35e;
+  box-shadow:
+    0 0 0 1px rgba(244, 211, 94, 0.45),
+    0 0 22px rgba(244, 211, 94, 0.38);
+  animation: shop-legend-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes shop-legend-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(244, 211, 94, 0.35),
+      0 0 16px rgba(244, 211, 94, 0.28);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(244, 211, 94, 0.85),
+      0 0 28px rgba(244, 211, 94, 0.55);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
