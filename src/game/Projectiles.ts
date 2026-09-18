@@ -10,11 +10,14 @@ type Slot = {
   ttl: number;
   radius: number;
   live: boolean;
+  pierce: boolean;
+  hitMark: number;
 };
 
 export class Projectiles {
   private readonly slots: Slot[] = [];
   private cursor = 0;
+  private sweep = 1;
 
   constructor(scene: Phaser.Scene) {
     for (let i = 0; i < BULLET_POOL; i++) {
@@ -30,6 +33,8 @@ export class Projectiles {
         ttl: 0,
         radius: 4,
         live: false,
+        pierce: false,
+        hitMark: 0,
       });
     }
   }
@@ -41,8 +46,10 @@ export class Projectiles {
     slot.vx = ev.vx;
     slot.vy = ev.vy;
     slot.damage = ev.damage;
-    slot.ttl = 1.35;
+    slot.ttl = ev.pierce ? 0.85 : 1.35;
     slot.radius = ev.radius;
+    slot.pierce = Boolean(ev.pierce);
+    slot.hitMark = this.sweep++;
     slot.gfx.setFillStyle(ev.color, 1);
     slot.gfx.setScale(ev.radius / 4);
     slot.gfx.setPosition(ev.x, ev.y);
@@ -50,7 +57,10 @@ export class Projectiles {
     slot.gfx.setActive(true);
   }
 
-  update(dt: number, onHit: (x: number, y: number, dmg: number, r: number) => boolean) {
+  update(
+    dt: number,
+    onHit: (x: number, y: number, dmg: number, r: number, mark: number, pierce: boolean) => boolean,
+  ) {
     for (const s of this.slots) {
       if (!s.live) continue;
       s.ttl -= dt;
@@ -66,7 +76,8 @@ export class Projectiles {
         this.kill(s);
         continue;
       }
-      if (onHit(s.gfx.x, s.gfx.y, s.damage, s.radius)) this.kill(s);
+      const consumed = onHit(s.gfx.x, s.gfx.y, s.damage, s.radius, s.hitMark, s.pierce);
+      if (consumed && !s.pierce) this.kill(s);
     }
   }
 
