@@ -9,18 +9,19 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 - Change the smallest set of files that implements the request.
 - Push those files to **canonical GitHub** `PaulLVogel/lagoon-reef-ocean-bloom` branch **`main`**.
 - Vercel project `vampire-snake-o34e` auto-builds from that `main`. Live: https://vampire-snake-o34e.vercel.app/
-- Never commit `.vercel/output`.
+- Never commit `.vercel/output`. A frozen output folder ships an old build and ignores source.
 - Never push new work to `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app`. That prototype is **stale**.
 
-Last shipped: **6-slot multi-buy shop, lock carries the exact offer, level-up can grant weapons** (on top of XP/full heal, 6 global stats, mine/rail/chain/aura, star gems, FIT zoom, 1:1 merge, wave-10 boss).
+If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Full rules live in root `HANDOFF.md`.
+Last shipped: **split head/segment weapon pools, head inventory, color-coded segments, mine cap + 2s fuse, mortar artillery** (on top of XP/full heal, 6 global stats, mine/rail/chain/aura, star gems, FIT zoom, 1:1 merge, wave-10 boss).
 
-## Live additions after Phase 6
+Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
-- XP: gem gold + vacuum → `MainScene.grantXp`. Curve `round(18 * level^1.5)`.
-- Level-up: full heal, pause combat, 3 random picks from **6 stats + 7 weapons** (`src/game/stats.ts`). `pickLevelOffer` may call `grantWeapon`.
-- Global stats on `SnakePlayer.applyGlobalStat`: max HP, speed, CDR, damage, pickup radius, armor.
-- Weapons in `WEAPON_CYCLE`: single, cone, melee, mine, rail, chain, aura. Still 1-to-1 + T1–T3 merge.
-- Gems are white-stroke stars (cyan / yellow / magenta).
-- Shop: `SHOP_SLOTS = 6`. Lock copies the offer onto `heldOffers[i]`; next shop must keep those objects. Buys append `shopBought` + `pendingBuys`; shop stays open until Next Wave.
+- `artifacts/PROJECT_CONTEXT.md`
+- `artifacts/HANDOFF.md`
+- `artifacts/lagoon-reef-ocean-bloom/PROJECT_CONTEXT.md`
+- `artifacts/lagoon-reef-ocean-bloom/HANDOFF.md`
+- `artifacts/lagoon-reef-ocean-bloom/src/game/HANDOFF.md`
+
+so the next chat can read them if the workspace is a fresh scaffold.
