@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Shop cost hook** on `main` (purchase-history ×1.5, 5g reroll, rarity weights, 10% bank interest).
+Last shipped: **Shop skip hook** on `main` (tactical skip + interest, priced-out pity +10 HP / +2g, freeze 3 offers, gray cards + green Next Wave pulse).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -80,6 +80,9 @@ Collect hook: pickup radius larger than head hitbox (shop `pickup_radius`), high
 - Reroll: shop button, flat `SHOP_REROLL_COST` (5g). `requestReroll()` deducts gold, MainScene `rollShop()` rolls 3 new offers. Disabled after a pick or if gold < 5.
 - Rarity: Common 70% / Rare 25% / Legendary 5%. Legendary cards use `.shop-legend` glow. New legendary `add_2_blasters`.
 - Interest: leftover gold (after buy or skip) gets `bankInterest` = `floor(gold * 0.1)` in `startNextWave`. Next Wave is allowed without a pick so players can bank.
-- Skip: `requestNextWave` allowed during shop even if offers are affordable (bank path).
+- Skip: `requestNextWave` allowed during shop even if offers are affordable (tactical bank path).
+- Pity: if `canAffordAny` is false and the player skips without a pick, `startNextWave` heals `SHOP_PITY_HP` (10, cap 100) and adds `SHOP_PITY_GOLD` (2) after interest. HUD `lastPityHp` / `lastPityGold`.
+- Freeze: `requestToggleFreeze()` stores `frozenKinds`. Next `rollShop()` rebuilds those 3 via `offersFromKinds` (costs rescale with wave). Reroll disabled while frozen. Buying an offer or Restart clears freeze.
+- Priced-out UI: cards gray + `.shop-next-pulse` on Next Wave when nothing is affordable.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted / rerolled).
-- Death Restart zeros gold **and** `purchaseHistory`.
+- Death Restart zeros gold, `purchaseHistory`, and freeze.
