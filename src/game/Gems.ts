@@ -8,13 +8,15 @@ import {
   GEM_POP,
   GEM_RADIUS,
   GEM_RED_VALUE,
-  HEAD_RADIUS,
   HEALTH_DROP_CHANCE,
   HEALTH_HEAL,
   HEALTH_SIZE,
   MAGNET_DROP_CHANCE,
   MAGNET_SIZE,
   MAGNET_SPEED,
+  PICKUP_RADIUS_BASE,
+  SEGMENT_VACUUM_RADIUS,
+  SEGMENT_VACUUM_SPEED,
 } from "./constants";
 
 type Kind = "gem" | "health" | "magnet";
@@ -51,10 +53,24 @@ function tierFromHp(hp: number): GemTier {
   return TIERS[0]!;
 }
 
+export type PickupEvent = {
+  x: number;
+  y: number;
+  kind: Kind;
+  gold: number;
+};
+
 export type PickupResult = {
   gold: number;
   heal: number;
   magnet: boolean;
+  events: PickupEvent[];
+};
+
+export type CollectOpts = {
+  pickupRadius?: number;
+  segments?: { x: number; y: number }[];
+  segmentVacuum?: boolean;
 };
 
 export class Gems {
@@ -114,15 +130,21 @@ export class Gems {
     this.spawnFromKill(x, y, enemyHp);
   }
 
-  /** Head-only collect. Segments never pick up. */
-  collectHead(hx: number, hy: number, dt: number): PickupResult {
-    const result: PickupResult = { gold: 0, heal: 0, magnet: false };
-    const reach = HEAD_RADIUS + GEM_RADIUS + 8;
+  /**
+   * Head-only collect. Segments never pick up.
+   * Pickup uses a radius larger than the physical head hitbox.
+   * Optional segment vacuum pulls nearby gems toward the head.
+   */
+  collectHead(hx: number, hy: number, dt: number, opts: CollectOpts = {}): PickupResult {
+    const result: PickupResult = { gold: 0, heal: 0, magnet: false, events: [] };
+    const reach = opts.pickupRadius ?? PICKUP_RADIUS_BASE;
     const reach2 = reach * reach;
+    const segs = opts.segmentVacuum ? opts.segments ?? [] : [];
+    const vacR2 = SEGMENT_VACUUM_RADIUS * SEGMENT_VACUUM_RADIUS;
 
     for (const s of this.slots) {
       if (!s.live) continue;
-      this.stepPhysics(s, hx, hy, dt);
+      this.stepPhysics(s, hx, hy, dt, segs, vacR2);
 
       const dx = hx - s.root.x;
       const dy = hy - s.root.y;
@@ -130,16 +152,19 @@ export class Gems {
 
       if (s.kind === "health") {
         result.heal += HEALTH_HEAL;
+        result.events.push({ x: s.root.x, y: s.root.y, kind: "health", gold: 0 });
         this.kill(s);
         continue;
       }
       if (s.kind === "magnet") {
         result.magnet = true;
+        result.events.push({ x: s.root.x, y: s.root.y, kind: "magnet", gold: 0 });
         this.kill(s);
         this.activateMagnet();
         continue;
       }
       result.gold += s.value;
+      result.events.push({ x: s.root.x, y: s.root.y, kind: "gem", gold: s.value });
       this.kill(s);
     }
     return result;
@@ -220,7 +245,14 @@ export class Gems {
     slot.root.setAlpha(1);
   }
 
-  private stepPhysics(s: Slot, hx: number, hy: number, dt: number) {
+  private stepPhysics(
+    s: Slot,
+    hx: number,
+    hy: number,
+    dt: number,
+    segs: { x: number; y: number }[],
+    vacR2: number,
+  ) {
     if (s.magnetized && s.kind === "gem") {
       const ang = Math.atan2(hy - s.root.y, hx - s.root.x);
       s.vx = Math.cos(ang) * MAGNET_SPEED;
@@ -228,6 +260,25 @@ export class Gems {
       s.root.x += s.vx * dt;
       s.root.y += s.vy * dt;
       return;
+    }
+    if (s.kind === "gem" && segs.length > 0) {
+      let near = false;
+      for (const p of segs) {
+        const dx = s.root.x - p.x;
+        const dy = s.root.y - p.y;
+        if (dx * dx + dy * dy <= vacR2) {
+          near = true;
+          break;
+        }
+      }
+      if (near) {
+        const ang = Math.atan2(hy - s.root.y, hx - s.root.x);
+        s.vx = Math.cos(ang) * SEGMENT_VACUUM_SPEED;
+        s.vy = Math.sin(ang) * SEGMENT_VACUUM_SPEED;
+        s.root.x += s.vx * dt;
+        s.root.y += s.vy * dt;
+        return;
+      }
     }
     s.root.x += s.vx * dt;
     s.root.y += s.vy * dt;
