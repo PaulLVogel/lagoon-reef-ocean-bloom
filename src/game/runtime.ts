@@ -1,5 +1,5 @@
 import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS } from "./constants";
-import { SHOP_REROLL_COST, type ShopKind, type ShopOffer } from "./shop";
+import { allowsOverdraft, SHOP_REROLL_COST, type ShopKind, type ShopOffer } from "./shop";
 
 export type HudSnap = {
   playing: boolean;
@@ -15,6 +15,9 @@ export type HudSnap = {
   kills: number;
   swarm: number;
   gold: number;
+  goldDisplay: number;
+  totalGoldEarned: number;
+  nextWaveBank: number;
   waveMs: number;
   wave: number;
   shopOffers: ShopOffer[];
@@ -39,6 +42,9 @@ type Bucket = {
   purchaseHistory: ShopKind[];
   shopFrozen: boolean;
   frozenKinds: ShopKind[];
+  goldTallyFrom: number | null;
+  nextWaveBank: number;
+  totalGoldEarned: number;
   injected: Set<string> | null;
   stickX: number;
   stickY: number;
@@ -57,6 +63,9 @@ const emptyHud = (): HudSnap => ({
   kills: 0,
   swarm: 0,
   gold: 0,
+  goldDisplay: 0,
+  totalGoldEarned: 0,
+  nextWaveBank: 0,
   waveMs: WAVE_DURATION_MS,
   wave: 1,
   shopOffers: [],
@@ -81,6 +90,9 @@ const fallback: Bucket = {
   purchaseHistory: [],
   shopFrozen: false,
   frozenKinds: [],
+  goldTallyFrom: null,
+  nextWaveBank: 0,
+  totalGoldEarned: 0,
   injected: null,
   stickX: 0,
   stickY: 0,
@@ -104,6 +116,9 @@ export function runtime(): Bucket {
       purchaseHistory: [],
       shopFrozen: false,
       frozenKinds: [],
+      goldTallyFrom: null,
+      nextWaveBank: 0,
+      totalGoldEarned: 0,
       injected: null,
       stickX: 0,
       stickY: 0,
@@ -114,6 +129,9 @@ export function runtime(): Bucket {
   if (!w.__vsRuntime.purchaseHistory) w.__vsRuntime.purchaseHistory = [];
   if (!w.__vsRuntime.frozenKinds) w.__vsRuntime.frozenKinds = [];
   if (typeof w.__vsRuntime.shopFrozen !== "boolean") w.__vsRuntime.shopFrozen = false;
+  if (typeof w.__vsRuntime.nextWaveBank !== "number") w.__vsRuntime.nextWaveBank = 0;
+  if (typeof w.__vsRuntime.totalGoldEarned !== "number") w.__vsRuntime.totalGoldEarned = 0;
+  if (w.__vsRuntime.goldTallyFrom === undefined) w.__vsRuntime.goldTallyFrom = null;
   return w.__vsRuntime;
 }
 
@@ -147,6 +165,9 @@ export function requestRestart() {
   b.purchaseHistory = [];
   b.shopFrozen = false;
   b.frozenKinds = [];
+  b.goldTallyFrom = null;
+  b.nextWaveBank = 0;
+  b.totalGoldEarned = 0;
   b.started = true;
   patchHud({
     playing: true,
@@ -156,6 +177,9 @@ export function requestRestart() {
     swarm: 0,
     kills: 0,
     gold: 0,
+    goldDisplay: 0,
+    totalGoldEarned: 0,
+    nextWaveBank: 0,
     waveMs: WAVE_DURATION_MS,
     wave: 1,
     shopOffers: [],
@@ -182,12 +206,13 @@ export function pickShopOffer(id: string) {
   if (b.shopPicked) return;
   const offer = b.shopOffers.find((o) => o.id === id);
   if (!offer) return;
-  if (b.snap.gold < offer.cost) return;
+  if (!allowsOverdraft(offer.kind) && b.snap.gold < offer.cost) return;
   b.shopPicked = id;
   b.pendingUpgrade = offer.kind;
   b.purchaseHistory = [...b.purchaseHistory, offer.kind];
   b.shopFrozen = false;
   b.frozenKinds = [];
+  b.goldTallyFrom = b.snap.gold;
   patchHud({ shopPicked: id, gold: b.snap.gold - offer.cost, shopFrozen: false });
 }
 
@@ -197,6 +222,7 @@ export function requestReroll() {
   if (b.shopPicked) return;
   if (b.shopFrozen) return;
   if (b.snap.gold < SHOP_REROLL_COST) return;
+  b.goldTallyFrom = b.snap.gold;
   patchHud({ gold: b.snap.gold - SHOP_REROLL_COST });
   b.rerollRequested = true;
 }
