@@ -1,7 +1,7 @@
 import { Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isGameStarted, setGameStarted } from "@/game/input";
-import { getHud, subscribeHud } from "@/game/runtime";
+import { getHud, requestRestart, subscribeHud } from "@/game/runtime";
 import { cn } from "@/lib/cn";
 import { VirtualStick } from "./virtual-stick";
 
@@ -14,7 +14,7 @@ export function GameOverlay() {
     setGameStarted(true);
   };
 
-  const showStart = !hud.playing && !isGameStarted();
+  const showStart = !hud.playing && !hud.dead && !isGameStarted();
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
@@ -79,6 +79,35 @@ export function GameOverlay() {
             >
               <Play className="size-4" strokeWidth={2} />
               Start
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {hud.dead ? (
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/72 px-6 backdrop-blur-[2px]">
+          <div className="w-full max-w-md rounded-3xl border border-border bg-elevated p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
+              Downed
+            </p>
+            <h1 className="font-display mt-2 text-4xl leading-tight tracking-tight text-fg">
+              The swarm got you
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              {hud.kills} kill{hud.kills === 1 ? "" : "s"}. Refresh used to be
+              the only way out — Restart drops you back in the arena.
+            </p>
+            <button
+              type="button"
+              onClick={() => requestRestart()}
+              className={cn(
+                "mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl",
+                "bg-fg text-sm font-medium text-bg transition-transform duration-(--motion-quick)",
+                "hover:opacity-95 active:scale-[0.98]",
+              )}
+            >
+              <Play className="size-4" strokeWidth={2} />
+              Restart
             </button>
           </div>
         </div>

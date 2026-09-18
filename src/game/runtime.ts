@@ -2,6 +2,7 @@ import { DEFAULT_SEGMENT_COUNT } from "./constants";
 
 export type HudSnap = {
   playing: boolean;
+  dead: boolean;
   speed: number;
   segments: number;
   hp: number;
@@ -16,6 +17,7 @@ export type HudSnap = {
 type Bucket = {
   snap: HudSnap;
   started: boolean;
+  restartRequested: boolean;
   injected: Set<string> | null;
   stickX: number;
   stickY: number;
@@ -26,6 +28,7 @@ type Bucket = {
 const fallback: Bucket = {
   snap: {
     playing: false,
+    dead: false,
     speed: 0,
     segments: DEFAULT_SEGMENT_COUNT,
     hp: 100,
@@ -34,6 +37,7 @@ const fallback: Bucket = {
     swarm: 0,
   },
   started: false,
+  restartRequested: false,
   injected: null,
   stickX: 0,
   stickY: 0,
@@ -48,6 +52,7 @@ export function runtime(): Bucket {
     w.__vsRuntime = {
       snap: { ...fallback.snap },
       started: false,
+      restartRequested: false,
       injected: null,
       stickX: 0,
       stickY: 0,
@@ -75,4 +80,17 @@ export function subscribeHud(fn: (s: HudSnap) => void) {
   return () => {
     b.listeners.delete(fn);
   };
+}
+
+export function requestRestart() {
+  const b = runtime();
+  b.restartRequested = true;
+  b.started = true;
+  patchHud({
+    playing: true,
+    dead: false,
+    hp: 100,
+    swarm: 0,
+    kills: 0,
+  });
 }
