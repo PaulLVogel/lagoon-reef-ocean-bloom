@@ -15,12 +15,12 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating bars, dead segments still trail, enemies chase nearest body part).
+Last shipped: **modular weapons + item modifiers** on `main` (orbiting blade removed; exactly one weapon per segment: SINGLE_SHOT / CONE_BURST / MELEE_SLASH; range-gated targeting; `applyItemModifier`).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
 - Segment HP: 100 each, floating Graphics bars, `isActive` false at 0 (no fire, tint 0x555555, hide bar). `reviveAll()` on wave end. Dead segments do not take more damage.
-- Segment weapons: each trailing **active** segment is an independent party member. Targeting and shots use **that segment's (x, y)** only — never head position or facing.
+- Segment weapons: each trailing **active** segment is an independent party member. Targeting and shots use **that segment's (x, y)** only — never head position or facing. Dead segments do not fire. **Exactly one** weapon per segment — no orbiting extras.
 - `SnakePlayer` owns player, trail, weapons, `heal()`, pickup radius, segment vacuum. `MainScene` owns enemies, bullets, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand).
 - Phaser: `import * as Phaser from "phaser"`.
@@ -31,8 +31,8 @@ Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating 
 ## File map
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, segments, trail, per-segment HP/bars/grey-out, weapons + independent target/fire, `heal()`, `reviveAll()`, pickup ring |
-| `src/game/Weapon.ts` | `Weapon` / `FireEvent` / `EnemyScan` / `makeWeapon` / `defaultLoadout` |
+| `src/game/SnakePlayer.ts` | head, segments, trail, per-segment HP/bars/grey-out, one weapon per segment, slash graphic, `applyItemModifier`, `heal()`, `reviveAll()`, pickup ring |
+| `src/game/Weapon.ts` | `WeaponType` SINGLE_SHOT/CONE_BURST/MELEE_SLASH, stats + multipliers, `FireEvent`, `makeWeapon`, `defaultLoadout` |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, `spawnFromKill`, collect+Fever+blip |
 | `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum, `collectHead` |
 | `src/game/shop.ts` | catalog + rarity + `scaledOfferCost` + `rollShopOffers` + `offersFromKinds` + `canAffordAny` + `bankInterest` + pity constants |
@@ -42,14 +42,23 @@ Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating 
 | `src/game/constants.ts` | tunables including gem values, pickup radius, combo window |
 | `src/components/game-overlay.tsx` | start / HUD clock / gold / fever / death / shop |
 
-## Phase 2 weapons
-Every trailing segment holds its own `Weapon` (`type`, `fireRate`, `lastFired`, `segmentIndex`). Targeting uses **that segment's (x, y)** only — never head position or head facing. `positionHistory` trail is unchanged.
+## Weapons (one per trailing segment)
+
+Orbiting / circling blades are **gone**. Each segment holds exactly one `Weapon`. Targeting uses **that segment's (x, y)** only — never head position or head facing. `positionHistory` trail is unchanged. Greyed-out segments skip fire.
 
 | Cycle | Type | Behavior |
 |---|---|---|
-| 0, 3, … | blaster | nearest enemy to this segment, 280ms, 6 dmg, shot from segment xy |
-| 1, 4, … | turret | nearest enemy to this segment, 420ms, 8 dmg, shot from segment xy |
-| 2, 5, … | blade | two rects orbit **this** segment, 160ms CD, 5 dmg |
+| 0, 3, … | `single_shot` | nearest enemy in `baseRange * rangeMultiplier`, 280ms, projectile from segment xy |
+| 1, 4, … | `cone_burst` | 3–5 spread pellets toward nearest in-range enemy |
+| 2, 5, … | `melee_slash` | instant arc/cleave graphic, no traveling bullet; hits in the wedge |
+
+Stats: `baseDamage`, `baseRange`, `baseFireRate` plus `damageMultiplier` / `rangeMultiplier` / `fireRateMultiplier` (default 1). Closest enemy outside calculated range → no fire.
+
+Shop hook: `applyItemModifier(segmentIndex, "damage" \| "range" \| "fireRate", multiplier)`.
+
+## Phase 2 weapons (historical)
+
+Replaced by the modular types above. Shop kinds `add_blaster` / `turret_*` still apply to `single_shot` / `cone_burst`.
 
 ## Phase 6 — economy + drop hook + collect hook
 Kill → `MainScene.applyEnemyHit` → `gems.spawnFromKill(x, y, enemy.maxHp)`.

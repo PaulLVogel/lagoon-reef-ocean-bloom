@@ -9,7 +9,7 @@ export const BASE_SPEED = 240;
 
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
-export const BULLET_POOL = 72;
+export const BULLET_POOL = 96;
 
 export const ENEMY_RADIUS = 12;
 export const ENEMY_HP = 24;
@@ -65,6 +65,9 @@ export const COLOR = {
   blaster: 0xf4ebe3,
   turret: 0xc5d0d8,
   blade: 0xd47872,
+  singleShot: 0xf4ebe3,
+  coneBurst: 0x7dd3fc,
+  meleeSlash: 0xfbbf24,
   hp: 0xb85c57,
   gemGreen: 0x5eead4,
   gemBlue: 0x60a5fa,

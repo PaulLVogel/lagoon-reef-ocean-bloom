@@ -14,17 +14,18 @@ import {
 import {
   defaultLoadout,
   makeWeapon,
+  nextWeaponType,
+  weaponCooldown,
+  weaponDamage,
+  weaponRange,
   type EnemyScan,
   type FireEvent,
   type Weapon,
+  type WeaponStat,
+  type WeaponType,
 } from "./Weapon";
 
 type HistoryPoint = { x: number; y: number };
-
-type BladePair = {
-  segmentIndex: number;
-  blades: Phaser.GameObjects.Rectangle[];
-};
 
 export type BodySegment = {
   sprite: Phaser.GameObjects.Container;
@@ -37,10 +38,10 @@ export type BodySegment = {
   baseTint: number;
 };
 
-const BLADE_ORBIT = 34;
-const BLADE_RADIUS = 11;
-const BLASTER_SPEED = 520;
-const TURRET_SPEED = 460;
+const SHOT_SPEED = 520;
+const CONE_SPEED = 400;
+const CONE_SPREAD = 0.22;
+const SLASH_ARC = 1.15;
 const SEGMENT_MAX_HP = 100;
 const DEAD_TINT = 0x555555;
 const BAR_W = 22;
@@ -65,8 +66,6 @@ export class SnakePlayer {
   private readonly headGlow: Phaser.GameObjects.Arc;
   private readonly pickupRing: Phaser.GameObjects.Arc;
   private readonly snout: Phaser.GameObjects.Triangle;
-  private readonly bladePairs: BladePair[] = [];
-  private bladeAngle = 0;
   private readonly fire: (ev: FireEvent) => void;
 
   constructor(
@@ -177,22 +176,25 @@ export class SnakePlayer {
     this.layoutSegments();
   }
 
-  addArmedSegment(type: Weapon["type"]) {
+  addArmedSegment(type?: WeaponType) {
     this.addSegment();
-    this.armSegment(this.segments.length - 1, type);
+    const index = this.segments.length - 1;
+    this.armSegment(index, type ?? nextWeaponType(index));
   }
 
-  boostFireRate(type: Weapon["type"], mul: number, floor = 140) {
-    for (const w of this.weapons) {
-      if (w.type !== type) continue;
-      w.fireRate = Math.max(floor, Math.round(w.fireRate * mul));
-    }
+  /** Shop / item hook. Multiplies a single segment weapon's damage, range, or fire rate. */
+  applyItemModifier(segmentIndex: number, statToBuff: WeaponStat, multiplierValue: number) {
+    const w = this.weapons.find((weapon) => weapon.segmentIndex === segmentIndex);
+    if (!w || !Number.isFinite(multiplierValue) || multiplierValue <= 0) return;
+    if (statToBuff === "damage") w.damageMultiplier *= multiplierValue;
+    else if (statToBuff === "range") w.rangeMultiplier *= multiplierValue;
+    else w.fireRateMultiplier *= multiplierValue;
   }
 
-  boostDamage(type: Weapon["type"], add: number) {
+  buffWeaponType(type: WeaponType, statToBuff: WeaponStat, multiplierValue: number) {
     for (const w of this.weapons) {
       if (w.type !== type) continue;
-      w.damage += add;
+      this.applyItemModifier(w.segmentIndex, statToBuff, multiplierValue);
     }
   }
 
@@ -263,31 +265,7 @@ export class SnakePlayer {
     this.headGlow.setScale(pulse);
 
     this.layoutSegments();
-    this.updateBlades(dt);
     if (combatOn) this.tickWeapons(now, enemies);
-  }
-
-  bladeHits(dummyX: number, dummyY: number, dummyR: number, now: number): number {
-    let dealt = 0;
-    for (const w of this.weapons) {
-      if (w.type !== "blade") continue;
-      const host = this.body[w.segmentIndex];
-      if (!host || !host.isActive) continue;
-      if (now - w.lastFired < w.fireRate) continue;
-      const pair = this.bladePairs.find((p) => p.segmentIndex === w.segmentIndex);
-      if (!pair) continue;
-      for (const blade of pair.blades) {
-        const dx = blade.x - dummyX;
-        const dy = blade.y - dummyY;
-        const need = BLADE_RADIUS + dummyR;
-        if (dx * dx + dy * dy <= need * need) {
-          w.lastFired = now;
-          dealt += w.damage;
-          break;
-        }
-      }
-    }
-    return dealt;
   }
 
   destroy() {
@@ -296,13 +274,9 @@ export class SnakePlayer {
       s.healthBar.destroy();
       s.sprite.destroy(true);
     }
-    for (const pair of this.bladePairs) {
-      for (const b of pair.blades) b.destroy();
-    }
     this.segments.length = 0;
     this.body.length = 0;
     this.positionHistory.length = 0;
-    this.bladePairs.length = 0;
     this.weapons.length = 0;
   }
 
@@ -373,43 +347,27 @@ export class SnakePlayer {
     g.fillRect(ox, oy, BAR_W * t, BAR_H);
   }
 
-  private armSegment(index: number, type: Weapon["type"]) {
-    const existing = this.weapons.find((w) => w.segmentIndex === index);
-    if (existing) return;
+  /** Exactly one weapon per segment. Second arm is ignored. */
+  private armSegment(index: number, type: WeaponType) {
+    if (this.weapons.some((w) => w.segmentIndex === index)) return;
     this.weapons.push(makeWeapon(type, index));
     this.attachMount(index, type);
   }
 
-  private attachMount(index: number, type: Weapon["type"]) {
+  private attachMount(index: number, type: WeaponType) {
     const seg = this.segments[index];
     if (!seg) return;
-    if (type === "blaster") {
-      const barrel = this.scene.add.rectangle(10, 0, 14, 5, COLOR.blaster);
+    if (type === "single_shot") {
+      const barrel = this.scene.add.rectangle(11, 0, 14, 5, COLOR.singleShot);
       seg.add(barrel);
-    } else if (type === "turret") {
-      const cup = this.scene.add.circle(0, 0, 6, COLOR.turret);
-      seg.add(cup);
-    } else if (type === "blade") {
-      const a = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
-      const b = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
-      a.setDepth(19);
-      b.setDepth(19);
-      this.bladePairs.push({ segmentIndex: index, blades: [a, b] });
-    }
-  }
-
-  private updateBlades(dt: number) {
-    this.bladeAngle += dt * 4.2;
-    for (const pair of this.bladePairs) {
-      const host = this.segments[pair.segmentIndex];
-      if (!host) continue;
-      pair.blades.forEach((blade, i) => {
-        const ang = this.bladeAngle + i * Math.PI;
-        blade.setPosition(host.x + Math.cos(ang) * BLADE_ORBIT, host.y + Math.sin(ang) * BLADE_ORBIT);
-        blade.setRotation(ang + Math.PI / 2);
-        const live = this.body[pair.segmentIndex]?.isActive !== false;
-        blade.setAlpha(live ? 1 : 0.28);
-      });
+    } else if (type === "cone_burst") {
+      const left = this.scene.add.rectangle(10, -4, 12, 4, COLOR.coneBurst);
+      const right = this.scene.add.rectangle(10, 4, 12, 4, COLOR.coneBurst);
+      seg.add(left);
+      seg.add(right);
+    } else {
+      const fang = this.scene.add.triangle(12, 0, 0, -6, 16, 0, 0, 6, COLOR.meleeSlash);
+      seg.add(fang);
     }
   }
 
@@ -431,11 +389,10 @@ export class SnakePlayer {
 
   private tickWeapons(now: number, enemies: EnemyScan[]) {
     for (const w of this.weapons) {
-      if (w.type === "blade") continue;
       const state = this.body[w.segmentIndex];
       const seg = this.segments[w.segmentIndex];
       if (!seg || !state || !state.isActive) continue;
-      if (now - w.lastFired < w.fireRate) continue;
+      if (now - w.lastFired < weaponCooldown(w)) continue;
 
       const target = this.nearestEnemyTo(seg.x, seg.y, enemies);
       if (!target) continue;
@@ -443,21 +400,81 @@ export class SnakePlayer {
       const dx = target.x - seg.x;
       const dy = target.y - seg.y;
       const mag = Math.hypot(dx, dy) || 1;
+      const range = weaponRange(w);
+      if (mag > range) continue;
+
+      const angle = Math.atan2(dy, dx);
       const ux = dx / mag;
       const uy = dy / mag;
-      const speed = w.type === "turret" ? TURRET_SPEED : BLASTER_SPEED;
+      const dmg = weaponDamage(w);
 
-      this.fire({
-        x: seg.x + ux * 16,
-        y: seg.y + uy * 16,
-        vx: ux * speed,
-        vy: uy * speed,
-        damage: w.damage,
-        color: w.type === "turret" ? COLOR.turret : COLOR.blaster,
-        radius: w.type === "turret" ? 5 : 4,
-      });
+      if (w.type === "single_shot") {
+        this.fire({
+          kind: "bullet",
+          x: seg.x + ux * 16,
+          y: seg.y + uy * 16,
+          vx: ux * SHOT_SPEED,
+          vy: uy * SHOT_SPEED,
+          damage: dmg,
+          color: COLOR.singleShot,
+          radius: 4,
+        });
+      } else if (w.type === "cone_burst") {
+        const pellets = 3 + (w.segmentIndex % 3);
+        const mid = (pellets - 1) / 2;
+        for (let i = 0; i < pellets; i++) {
+          const a = angle + (i - mid) * CONE_SPREAD;
+          this.fire({
+            kind: "bullet",
+            x: seg.x + Math.cos(a) * 14,
+            y: seg.y + Math.sin(a) * 14,
+            vx: Math.cos(a) * CONE_SPEED,
+            vy: Math.sin(a) * CONE_SPEED,
+            damage: dmg,
+            color: COLOR.coneBurst,
+            radius: 3.5,
+          });
+        }
+      } else {
+        this.playSlash(seg.x, seg.y, angle, range, SLASH_ARC);
+        this.fire({
+          kind: "slash",
+          x: seg.x,
+          y: seg.y,
+          vx: 0,
+          vy: 0,
+          damage: dmg,
+          color: COLOR.meleeSlash,
+          radius: range,
+          angle,
+          range,
+          arc: SLASH_ARC,
+        });
+      }
       w.lastFired = now;
     }
+  }
+
+  private playSlash(x: number, y: number, angle: number, range: number, arc: number) {
+    const g = this.scene.add.graphics();
+    g.setDepth(19);
+    g.setPosition(x, y);
+    g.fillStyle(COLOR.meleeSlash, 0.42);
+    g.slice(0, 0, range, angle - arc / 2, angle + arc / 2, false);
+    g.fillPath();
+    g.lineStyle(2.4, 0xfff4c8, 0.95);
+    g.beginPath();
+    g.arc(0, 0, range * 0.92, angle - arc / 2, angle + arc / 2, false);
+    g.strokePath();
+    this.scene.tweens.add({
+      targets: g,
+      alpha: 0,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration: 170,
+      ease: "Cubic.easeOut",
+      onComplete: () => g.destroy(),
+    });
   }
 
   private layoutSegments() {

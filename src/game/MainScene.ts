@@ -34,6 +34,7 @@ import {
   type ShopKind,
 } from "./shop";
 import { SnakePlayer } from "./SnakePlayer";
+import { type FireEvent } from "./Weapon";
 
 export class MainScene extends Phaser.Scene {
   private player!: SnakePlayer;
@@ -88,7 +89,7 @@ export class MainScene extends Phaser.Scene {
     const cy = WORLD_SIZE / 2;
     this.shots = new Projectiles(this);
     this.gems = new Gems(this);
-    this.player = new SnakePlayer(this, cx, cy, (ev) => this.shots.spawn(ev));
+    this.player = new SnakePlayer(this, cx, cy, (ev) => this.onFire(ev));
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
     this.cameras.main.startFollow(this.player.head, true, 0.14, 0.14);
     this.cameras.main.setDeadzone(70, 70);
@@ -178,11 +179,6 @@ export class MainScene extends Phaser.Scene {
           e.chase(t.x, t.y, dt);
         }
         this.shots.update(dt, (x, y, dmg, r) => this.hitEnemiesAt(x, y, dmg, r));
-        for (const e of this.enemies) {
-          if (!e.alive) continue;
-          const bladeDmg = this.player.bladeHits(e.x, e.y, e.radius, time);
-          if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
-        }
         this.checkPlayerContact(time);
         this.collectLoot(dt, time);
         this.pruneDead();
@@ -347,18 +343,18 @@ export class MainScene extends Phaser.Scene {
 
   private applyUpgrade(kind: ShopKind) {
     if (kind === "add_blaster") {
-      this.player.addArmedSegment("blaster");
+      this.player.addArmedSegment("single_shot");
     } else if (kind === "add_2_blasters") {
-      this.player.addArmedSegment("blaster");
-      this.player.addArmedSegment("blaster");
+      this.player.addArmedSegment("single_shot");
+      this.player.addArmedSegment("single_shot");
     } else if (kind === "turret_rate") {
-      this.player.boostFireRate("turret", 0.8);
+      this.player.buffWeaponType("cone_burst", "fireRate", 1.25);
     } else if (kind === "snake_speed") {
       this.player.boostSpeed(1.18);
     } else if (kind === "blaster_rate") {
-      this.player.boostFireRate("blaster", 0.8);
+      this.player.buffWeaponType("single_shot", "fireRate", 1.25);
     } else if (kind === "turret_dmg") {
-      this.player.boostDamage("turret", 3);
+      this.player.buffWeaponType("cone_burst", "damage", 1.4);
     } else if (kind === "heal") {
       this.playerHp = Math.min(100, this.playerHp + 30);
     } else if (kind === "pickup_radius") {
@@ -366,8 +362,8 @@ export class MainScene extends Phaser.Scene {
     } else if (kind === "segment_vacuum") {
       this.player.enableSegmentVacuum();
     } else if (kind === "credit_card") {
-      this.player.addArmedSegment("blaster");
-      this.player.addArmedSegment("blaster");
+      this.player.addArmedSegment("single_shot");
+      this.player.addArmedSegment("single_shot");
       this.player.boostSpeed(1.18);
     }
     patchHud({
@@ -376,6 +372,27 @@ export class MainScene extends Phaser.Scene {
       gold: this.gold,
       speed: Math.round(this.player.speed),
     });
+  }
+
+  private onFire(ev: FireEvent) {
+    if (ev.kind === "slash") this.applySlash(ev);
+    else this.shots.spawn(ev);
+  }
+
+  private applySlash(ev: FireEvent) {
+    const range = ev.range ?? 80;
+    const arc = ev.arc ?? 1.15;
+    const angle = ev.angle ?? 0;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const dx = e.x - ev.x;
+      const dy = e.y - ev.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > range + e.radius) continue;
+      const a = Math.atan2(dy, dx);
+      const diff = Math.abs(Phaser.Math.Angle.Wrap(a - angle));
+      if (diff <= arc / 2) this.applyEnemyHit(e, ev.damage);
+    }
   }
 
   private livingCount() {

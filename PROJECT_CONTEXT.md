@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating bars, dead segments still trail, enemies chase nearest body part).
+Last shipped: **modular weapons + item modifiers** on `main` (orbiting blade removed; exactly one weapon per segment: SINGLE_SHOT / CONE_BURST / MELEE_SLASH; range-gated targeting; `applyItemModifier`).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -38,6 +38,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
 *   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`), hides its bar, and stops firing, but **still follows `positionHistory`**. Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, bars, and firing. Head contact still damages player HP; segment contact damages that segment only.
+*   **Weapons:** Exactly **one** distinct weapon per trailing segment (`single_shot` / `cone_burst` / `melee_slash`). No orbiting/circling extras. Each weapon fires from its own (x, y) at the nearest enemy **only if** that enemy is inside `baseRange * rangeMultiplier`. Dead segments cannot attack. Stats live on the weapon (`baseDamage`, `baseRange`, `baseFireRate`, multipliers). Shop items call `applyItemModifier(segmentIndex, stat, multiplier)`.
 *   **Enemy chase:** Enemies seek the **nearest** head or segment (including greyed-out body), not only the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
@@ -51,7 +52,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 
 ### [x] Phase 2: Weapons
-`Weapon` interface. Every trailing segment is an independent party member (cycle blaster / turret / blade). Each scans alive enemies from **its own (x, y)** and fires from that point toward its unique nearest target. Head aim/location is ignored. `positionHistory` trail is unchanged.
+`Weapon` interface. Exactly one weapon per trailing segment (`single_shot` / `cone_burst` / `melee_slash`). Each scans alive enemies from **its own (x, y)** and fires only if the closest enemy is inside `baseRange * rangeMultiplier`. Head aim/location is ignored. No orbiting blades. `positionHistory` trail is unchanged. `applyItemModifier` is the shop/item hook.
 
 ### [x] Phase 3: Enemy Swarm
 `Enemy` class. Spawn outside camera. Chase head. Contact vs head or any segment. Death overlay + Restart (`scene.restart()`).
