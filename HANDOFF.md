@@ -20,20 +20,20 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 
-Last shipped: **weapon assignment overhaul on `main`** — split head/segment pools, head inventory, color-coded segments, mine cap + 2s fuse, mortar, **plus** GitHub shop `pendingBuys` drain restored in `MainScene`.
+Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×3). Weapon-pool overhaul still live.
 
 ## Rules
 
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
 - Segment HP: starts at 100 (`segmentMaxHp` grows with Max HP stat). `isActive` false at 0 (no fire, tint `0x555555`). Logic stays; **do not draw floating health bars**. `reviveAll()` / `fullHeal()` restore HP. Dead segments do not take more damage. Head contact damages player HP; segment contact damages that segment only. Armor is flat reduction (`mitigate`, min 1).
-- Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** starts with `single_shot` and can stack more **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
-- Segment weapons: each trailing **active** segment holds **exactly one** `Weapon`. Targeting and shots use **that origin (x, y)**. Dead segments do not fire. Head weapons all fire from the diamond. No orbiting extras.
+- Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** is the **halfling bard** spritesheet (`public/sprites/halfling-bard.png`, 16×16, 4-frame walk, integer scale 3, nearest-neighbor). Sheet faces left; `flipX` when moving right. Pickup ring stays a circle (head container is not rotated). Extra **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) still stack on the head without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
+- Segment weapons: each trailing **active** segment holds **exactly one** `Weapon`. Targeting and shots use **that origin (x, y)**. Dead segments do not fire. Head weapons all fire from the bard. No orbiting extras.
 - Weapon tiers: `Weapon.tier` is 1–3 (`WEAPON_TIER_CAP`). Duplicate buys `grantWeapon(type, slot)` merge the lowest-tier copy **in that slot**. Mine layer is unique: one segment only; T3 removes it from shop/level pools. Mine cadence **ignores** global CDR (3s, slight tier trim) and mines arm for 2s before colliding.
 - Mortar: fires a slow shell at the enemy's **frozen (x, y)**; no contact damage in flight; AoE on impact scales with `SnakePlayer.areaOfEffect`.
 - `SnakePlayer` owns player, trail, weapons (incl. head gun), `heal()`, `grantWeapon()`, pickup radius, segment vacuum. `MainScene` owns enemies (tiers + boss), player bullets, hostile boss shots, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand). Shop HUD is **DOM** (`game-overlay.tsx`) so camera zoom must not be applied to menus/HP/gold.
 - Phaser: `import * as Phaser from "phaser"`. Scale: `Phaser.Scale.FIT` + `CENTER_BOTH`, design size `GAME_WIDTH×GAME_HEIGHT` (1280×720). Mobile (`width < MOBILE_WIDTH` or portrait) uses `cameras.main.setZoom(MOBILE_ZOOM)` (`2/3`); desktop zoom `1`.
-- Shapes only. No PNGs unless asked.
+- Shapes only **except** the user-supplied bard sheet (`public/sprites/halfling-bard.png`). Do not replace it with a generated sheet unless asked.
 - **Next Wave must not `scene.restart()`.** Death Restart still does.
 - **Pickups: head only.** Segments never collect. Vacuum leftover **gems** (not health/magnet) to gold at wave end. Segment vacuum pulls gems toward the head.
 
@@ -41,16 +41,16 @@ Last shipped: **weapon assignment overhaul on `main`** — split head/segment po
 
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, trail, HP/grey-out, weapons + merge, `applyGlobalStat`, `fullHeal()`, armor, auras |
+| `src/game/SnakePlayer.ts` | head **halfling bard sprite**, trail, HP/grey-out, weapons + merge, `applyGlobalStat`, `fullHeal()`, armor, auras |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
-| `src/game/MainScene.ts` | FIT zoom, tiers + boss, mines (2s fuse), mortar shells, XP/level-up pause, **pendingBuys drain**, shop apply |
+| `src/game/MainScene.ts` | FIT zoom, `preload` bard sheet, tiers + boss, mines (2s fuse), mortar shells, XP/level-up pause, **pendingBuys drain**, shop apply |
+| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **bard sheet / scale** |
 | `src/game/Gems.ts` | star gems + health/magnet, pop, magnetize, vacuum, `collectHead` |
 | `src/game/stats.ts` | 6 global stats + head/segment weapon offers in `rollLevelOffers` |
 | `src/game/shop.ts` | `SHOP_SLOTS = 6`, `add_head_weapon` + `add_blaster`, lock copies the offer object |
 | `src/game/Enemy.ts` | `swarmer` / `grunt` / `brute` / `boss` specs, chase, boss volley+charge |
 | `src/game/Projectiles.ts` | player bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, `pendingBuys` queue, shop lock/reroll/next |
-| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors |
 | `src/game/createGame.ts` | Phaser.Game with `Scale.FIT` + `CENTER_BOTH` |
 | `src/components/game-overlay.tsx` | start / HUD / XP / level-up menu / death / shop + Lock |
 | `src/components/game-canvas.tsx` | Phaser host; canvas must not `h-full w-full` (breaks FIT letterbox) |
@@ -61,12 +61,12 @@ Orbiting / circling blades are **gone**. Head inventory + 1-to-1 segments.
 
 | Who | Type | Behavior |
 |---|---|---|
-| Head (diamond) | HEAD pool | `aura` / `melee_slash` / `cone_burst` / `single_shot` stack on the head. `grantWeapon(type, "head")`. |
+| Head (bard) | HEAD pool | `aura` / `melee_slash` / `cone_burst` / `single_shot` stack on the bard. `grantWeapon(type, "head")`. |
 | Shop-grown segment | SEGMENT pool | `railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`. Exactly one per segment. |
 | Duplicate buy | merge | lowest-tier copy **in that slot** → next tier. Mine: never a second segment. Cap T3. |
 | `cone_burst` | head | spread pellets from **head** xy |
 | `melee_slash` | head | instant arc/cleave from **head** xy |
-| `aura` | head | garlic ring around the diamond |
+| `aura` | head | garlic ring around the bard |
 | `single_shot` | both | nearest in-range enemy from that origin |
 | `mine_layer` | segment | 1 only; ~3s cadence ignores CDR; 2s grey→red fuse; T3 leaves pools |
 | `railgun` | segment | fast pierce bullet (red segment) |
@@ -96,7 +96,7 @@ Do **not** go back to a single purple chaser.
 - Each card has its own Lock. Lock stores the **exact** `ShopOffer` on `runtime.heldOffers[i]`. `rollShopOffers` copies a locked slot unchanged (same id, weapon, title, cost). `startNextWave` must **not** wipe `heldOffers`.
 - Reroll replaces **unlocked unbought** slots only. Blocked if none of those remain or gold < 5.
 - Buying a card deducts gold, marks that id in `shopBought`, queues `pendingBuys`, and unlocks **that** slot. Other cards stay buyable. The shop **does not close** until Next Wave.
-- `add_head_weapon` rolls HEAD pool onto the diamond. `add_blaster` rolls SEGMENT pool. Titles/badges: Head Upgrade vs New Segment.
+- `add_head_weapon` rolls HEAD pool onto the bard. `add_blaster` rolls SEGMENT pool. Titles/badges: Head Upgrade vs New Segment.
 - `add_2_blasters` / `credit_card` call `grantWeapon(..., "segment")` twice.
 
 ## Phase 6 — economy + drop hook + collect hook

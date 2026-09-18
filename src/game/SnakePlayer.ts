@@ -1,6 +1,8 @@
 import * as Phaser from "phaser";
 import {
   BASE_SPEED,
+  BARD_SCALE,
+  BARD_SHEET,
   COLOR,
   DEFAULT_SEGMENT_COUNT,
   HEAD_RADIUS,
@@ -63,6 +65,9 @@ const HEAD_WEAPON_INDEX = -1;
 const RAIL_SPEED = 980;
 const CHAIN_BOUNCES = 3;
 const CHAIN_RADIUS = 170;
+const BARD_WALK = "bard-walk";
+const BARD_IDLE_FRAME = 1;
+
 
 export class SnakePlayer {
   readonly head: Phaser.GameObjects.Container;
@@ -90,10 +95,12 @@ export class SnakePlayer {
   private readonly historyStride: number;
   private readonly headGlow: Phaser.GameObjects.Arc;
   private readonly pickupRing: Phaser.GameObjects.Arc;
-  private readonly snout: Phaser.GameObjects.Triangle;
+  private readonly mounts: Phaser.GameObjects.Container;
+  private readonly bard: Phaser.GameObjects.Sprite | null;
   private readonly fire: (ev: FireEvent) => void;
   private headWeaponSeq = HEAD_WEAPON_INDEX;
   private headAuraRing: Phaser.GameObjects.Arc | null = null;
+
 
   constructor(
     scene: Phaser.Scene,
@@ -112,29 +119,50 @@ export class SnakePlayer {
     this.headGlow = scene.add.circle(0, 0, HEAD_RADIUS + 10, COLOR.head, 0.16);
     this.pickupRing = scene.add.circle(0, 0, PICKUP_RADIUS_BASE, COLOR.gemGreen, 0.07);
     this.pickupRing.setStrokeStyle(1, COLOR.gemGreen, 0.28);
-    const diamond = scene.add.polygon(
-      0,
-      0,
-      [0, -(HEAD_RADIUS + 4), HEAD_RADIUS + 3, 0, 0, HEAD_RADIUS + 4, -(HEAD_RADIUS + 3), 0],
-      COLOR.head,
-    );
-    diamond.setStrokeStyle(2.4, COLOR.headStroke, 0.95);
-    diamond.setName("head-diamond");
-    this.snout = scene.add.triangle(
-      HEAD_RADIUS * 0.45,
-      0,
-      0,
-      -6,
-      12,
-      0,
-      0,
-      6,
-      COLOR.snout,
-    );
-    const eyeY = scene.add.circle(3, -5, 2.2, COLOR.eye);
-    const eyeX = scene.add.circle(3, 5, 2.2, COLOR.eye);
-    const barrel = scene.add.rectangle(HEAD_RADIUS + 2, 0, 11, 3.5, COLOR.singleShot);
-    this.head.add([this.pickupRing, this.headGlow, diamond, this.snout, eyeY, eyeX, barrel]);
+    this.mounts = scene.add.container(0, 0);
+
+    const hasBard = scene.textures.exists(BARD_SHEET);
+    if (hasBard) {
+      scene.textures.get(BARD_SHEET).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      if (!scene.anims.exists(BARD_WALK)) {
+        scene.anims.create({
+          key: BARD_WALK,
+          frames: scene.anims.generateFrameNumbers(BARD_SHEET, { start: 0, end: 3 }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+      this.bard = scene.add.sprite(0, 0, BARD_SHEET, BARD_IDLE_FRAME);
+      this.bard.setOrigin(0.5, 0.72);
+      this.bard.setScale(BARD_SCALE);
+      this.bard.setFlipX(true);
+      this.head.add([this.pickupRing, this.headGlow, this.bard, this.mounts]);
+    } else {
+      this.bard = null;
+      const diamond = scene.add.polygon(
+        0,
+        0,
+        [0, -(HEAD_RADIUS + 4), HEAD_RADIUS + 3, 0, 0, HEAD_RADIUS + 4, -(HEAD_RADIUS + 3), 0],
+        COLOR.head,
+      );
+      diamond.setStrokeStyle(2.4, COLOR.headStroke, 0.95);
+      diamond.setName("head-diamond");
+      const snout = scene.add.triangle(
+        HEAD_RADIUS * 0.45,
+        0,
+        0,
+        -6,
+        12,
+        0,
+        0,
+        6,
+        COLOR.snout,
+      );
+      const eyeY = scene.add.circle(3, -5, 2.2, COLOR.eye);
+      const eyeX = scene.add.circle(3, 5, 2.2, COLOR.eye);
+      const barrel = scene.add.rectangle(HEAD_RADIUS + 2, 0, 11, 3.5, COLOR.singleShot);
+      this.head.add([this.pickupRing, this.headGlow, diamond, snout, eyeY, eyeX, barrel, this.mounts]);
+    }
 
     const maxHistory = (Math.max(segmentCount, 4) + 4) * this.historyStride + 48;
     for (let i = maxHistory - 1; i >= 0; i--) {
@@ -371,7 +399,10 @@ export class SnakePlayer {
       this.vy = 0;
     }
 
-    this.head.setRotation(this.facing);
+    this.syncBard(moving);
+    if (!this.bard) this.head.setRotation(this.facing);
+    else this.head.setRotation(0);
+    this.mounts.setRotation(this.facing);
     const pulse = 1 + Math.sin(this.scene.time.now / 280) * 0.04;
     this.headGlow.setScale(pulse);
 
@@ -392,6 +423,18 @@ export class SnakePlayer {
     this.body.length = 0;
     this.positionHistory.length = 0;
     this.weapons.length = 0;
+  }
+
+  private syncBard(moving: boolean) {
+    if (!this.bard) return;
+    // Sheet faces left; flip when moving / last facing is right.
+    this.bard.flipX = Math.cos(this.facing) > 0;
+    if (moving) {
+      if (this.bard.anims.currentAnim?.key !== BARD_WALK) this.bard.play(BARD_WALK, true);
+    } else if (this.bard.anims.isPlaying) {
+      this.bard.stop();
+      this.bard.setFrame(BARD_IDLE_FRAME);
+    }
   }
 
   private mergeTargets(type: WeaponType, slot?: WeaponSlot) {
@@ -550,10 +593,10 @@ export class SnakePlayer {
       ring.setDepth(8);
       this.headAuraRing = ring;
     } else if (type === "cone_burst") {
-      this.head.add(this.scene.add.rectangle(HEAD_RADIUS + 2, -5, 10, 3, COLOR.coneBurst));
-      this.head.add(this.scene.add.rectangle(HEAD_RADIUS + 2, 5, 10, 3, COLOR.coneBurst));
+      this.mounts.add(this.scene.add.rectangle(HEAD_RADIUS + 2, -5, 10, 3, COLOR.coneBurst));
+      this.mounts.add(this.scene.add.rectangle(HEAD_RADIUS + 2, 5, 10, 3, COLOR.coneBurst));
     } else if (type === "melee_slash") {
-      this.head.add(this.scene.add.triangle(HEAD_RADIUS + 4, 0, 0, -5, 12, 0, 0, 5, COLOR.meleeSlash));
+      this.mounts.add(this.scene.add.triangle(HEAD_RADIUS + 4, 0, 0, -5, 12, 0, 0, 5, COLOR.meleeSlash));
     }
   }
 

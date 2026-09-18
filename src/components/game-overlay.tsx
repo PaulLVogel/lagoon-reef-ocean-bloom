@@ -211,7 +211,7 @@ export function GameOverlay() {
               Level up
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Full heal applied. Head upgrades attach to the diamond. New
+              Full heal applied. Head upgrades attach to the bard. New
               segments grow the tail. Combat is paused.
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">

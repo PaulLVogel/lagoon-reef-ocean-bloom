@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **weapon assignment overhaul on `main`** — split head/segment pools, head inventory, color-coded segments, mine cap + 2s fuse, mortar, **plus** GitHub shop `pendingBuys` drain restored in `MainScene`.
+Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×3) on top of the weapon-pool overhaul (`main`).
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -33,12 +33,12 @@ Last shipped: **weapon assignment overhaul on `main`** — split head/segment po
 | Path | Role |
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
-| `src/game/constants.ts` | gold head, mortar/rail/chain colors |
+| `src/game/constants.ts` | gold/head colors, mortar/rail/chain colors, bard sheet / scale |
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
-| `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
-| `src/game/MainScene.ts` | mine 2s fuse, mortar shells, **pendingBuys drain**, shop apply with slot |
+| `src/game/SnakePlayer.ts` | bard head sprite, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
+| `src/game/MainScene.ts` | preload bard sheet, mine 2s fuse, mortar shells, **pendingBuys drain**, shop apply with slot |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
@@ -63,13 +63,13 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
 *   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`) and stops firing, but **still follows `positionHistory`**. **Do not draw floating health bars** (logic stays). Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, and firing. Head contact still damages player HP; segment contact damages that segment only.
-*   **Weapons:** Two pools. **HEAD** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the gold diamond via `grantWeapon(type, "head")` — no new segment. **SEGMENT** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) stay 1-to-1 on the trail. Head starts with `single_shot`. Dead segments cannot attack. Duplicates merge in **that slot** (tier 1–3). **Mine layer:** only one segment; T3 removes it from shop/level pools; cadence ignores global CDR (~3s); 2s arming fuse. **Mortar:** slow shell to a frozen (x,y), no travel damage, AoE on impact × `player.areaOfEffect`. Head graphic is a gold diamond. Segment tint follows equipped weapon. Shop/level cards label **Head Upgrade** vs **New Segment**. Global stats use `SnakePlayer.applyGlobalStat`. Shop stat items still call `applyItemModifier`.
+*   **Weapons:** Two pools. **HEAD** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the **halfling bard head** via `grantWeapon(type, "head")` — no new segment. The head graphic is the user-supplied bard sheet (`public/sprites/halfling-bard.png`, 16×16 × 4, integer scale 3, nearest-neighbor). Sheet faces left; flip when moving right. Pickup ring stays a circle. **SEGMENT** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) stay 1-to-1 on the trail. Head starts with `single_shot`. Dead segments cannot attack. Duplicates merge in **that slot** (tier 1–3). **Mine layer:** only one segment; T3 removes it from shop/level pools; cadence ignores global CDR (~3s); 2s arming fuse. **Mortar:** slow shell to a frozen (x,y), no travel damage, AoE on impact × `player.areaOfEffect`. Segment tint follows equipped weapon. Shop/level cards label **Head Upgrade** vs **New Segment**. Global stats use `SnakePlayer.applyGlobalStat`. Shop stat items still call `applyItemModifier`.
+*   **Assets:** Phaser geometric shapes, **plus** the bard spritesheet (user-requested PNG). Do not swap that sheet unless asked.
 *   **Scale / camera:** `createGame` uses `Phaser.Scale.FIT` + `CENTER_BOTH` at 1280×720. Mobile zoom is `MOBILE_ZOOM` (`2/3`) on `cameras.main` only. HUD/shop/HP/gold live in `game-overlay.tsx` (DOM) and must ignore camera zoom.
 *   **Enemies:** Three tiers (`swarmer` / `grunt` / `brute`) plus wave-10 `boss`. Do not collapse back to one purple chaser. HP/damage/spawn rate scale with wave. Wave 10 stops normal spawns and spawns one boss.
 *   **Enemy chase:** Enemies seek the **nearest** head or segment (including greyed-out body), not only the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
-*   **Assets:** Phaser geometric shapes only unless PNGs are requested.
 *   **Next Wave:** Never `scene.restart()` for shop continue. Death Restart still uses `scene.restart()`.
 *   **Gems / pickups:** Head collects only (`collectHead` uses `player.x` / `player.y`). Segments never pick up. Uncollected **gems** vacuum to gold at wave end (health/magnet leftover are discarded). Segment vacuum only *pulls* gems toward the head.
 
@@ -133,7 +133,8 @@ These shipped on `main` `ef12c07`. Treat as current truth.
 - `game-canvas.tsx` must not force canvas `h-full w-full` (that fights FIT letterboxing).
 
 ### Weapons / start / bars
-- Head is a gold diamond. Starts with `single_shot`. Additional **HEAD** weapons (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the head via `grantWeapon(type, "head")`.
+- Head is the **halfling bard** (`public/sprites/halfling-bard.png`). 16×16, 4-frame walk, scale 3, nearest-neighbor. Starts with `single_shot`. Additional **HEAD** weapons (`aura` / `melee_slash` / `cone_burst` / `single_shot`) stack on the head via `grantWeapon(type, "head")`.
+- Pickup ring stays circular (container is not rotated). Sheet faces left; `flipX` when facing right.
 - **SEGMENT** weapons (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) are 1-to-1. `grantWeapon(type, "segment")` merges that slot or grows a segment.
 - Unique negative `segmentIndex` for each head gun so `tickWeapons` fires all of them.
 - Segment body tint: red rail, cyan lightning, gray mine, green mortar, yellow single shot.

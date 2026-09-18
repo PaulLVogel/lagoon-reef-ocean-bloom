@@ -92,7 +92,7 @@ const CATALOG: CatalogItem[] = [
   {
     kind: "add_head_weapon",
     title: "Head Upgrade",
-    blurb: "Attach a head-pool weapon to the diamond. Does not grow a segment.",
+    blurb: "Attach a head-pool weapon to the bard. Does not grow a segment.",
     cost: 32,
     rarity: "rare",
   },

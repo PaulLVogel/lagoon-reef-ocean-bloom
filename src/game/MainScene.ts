@@ -3,7 +3,7 @@ import {
   BOSS_WAVE, COLOR, COMBO_TRIGGER, COMBO_WINDOW_MS, DESKTOP_ZOOM, ENEMY_RADIUS,
   GOLD_TALLY_MS, HUD_TICK_MS, MAX_ENEMIES, MOBILE_WIDTH, MOBILE_ZOOM, PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS, PLAYER_MAX_HP, SEGMENT_RADIUS, SPAWN_INTERVAL_MIN_MS, SPAWN_INTERVAL_MS,
-  TILE, WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
+  TILE, BARD_FRAME_SIZE, BARD_SHEET, WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
 } from "./constants";
 import { ENEMY_BASE, Enemy, type EnemyKind, type EnemySpec } from "./Enemy";
 import { Gems } from "./Gems";
@@ -72,6 +72,13 @@ export class MainScene extends Phaser.Scene {
   private pierceMarks = new WeakMap<Enemy, Set<number>>();
 
   constructor() { super("main"); }
+
+  preload() {
+    this.load.spritesheet(BARD_SHEET, "/sprites/halfling-bard.png", {
+      frameWidth: BARD_FRAME_SIZE,
+      frameHeight: BARD_FRAME_SIZE,
+    });
+  }
 
   init() {
     this.hudAcc = 0; this.spawnAcc = 0; this.playerHp = PLAYER_MAX_HP; this.iFrameUntil = 0;
