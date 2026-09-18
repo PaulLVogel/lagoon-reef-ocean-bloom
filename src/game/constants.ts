@@ -17,7 +17,10 @@ export const ENEMY_SPEED = 95;
 export const ENEMY_CONTACT_DAMAGE = 8;
 export const MAX_ENEMIES = 28;
 export const SPAWN_INTERVAL_MS = 850;
+export const SPAWN_INTERVAL_MIN_MS = 280;
 export const PLAYER_IFRAME_MS = 450;
+
+export const WAVE_DURATION_MS = 30_000;
 
 export const COLOR = {
   arena: 0x0c0e12,

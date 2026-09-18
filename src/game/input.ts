@@ -23,7 +23,7 @@ function radialDeadzone(x: number, y: number, dz = 0.18): MoveVec {
 export function setGameStarted(value: boolean) {
   const b = runtime();
   b.started = value;
-  if (value) patchHud({ playing: true, dead: false });
+  if (value) patchHud({ playing: true, dead: false, waveClear: false });
 }
 
 export function isGameStarted() {

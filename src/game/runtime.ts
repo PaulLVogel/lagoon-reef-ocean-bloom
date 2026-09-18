@@ -1,8 +1,9 @@
-import { DEFAULT_SEGMENT_COUNT } from "./constants";
+import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS } from "./constants";
 
 export type HudSnap = {
   playing: boolean;
   dead: boolean;
+  waveClear: boolean;
   speed: number;
   segments: number;
   hp: number;
@@ -12,6 +13,8 @@ export type HudSnap = {
   hits?: number;
   kills: number;
   swarm: number;
+  waveMs: number;
+  wave: number;
 };
 
 type Bucket = {
@@ -29,12 +32,15 @@ const fallback: Bucket = {
   snap: {
     playing: false,
     dead: false,
+    waveClear: false,
     speed: 0,
     segments: DEFAULT_SEGMENT_COUNT,
     hp: 100,
     maxHp: 100,
     kills: 0,
     swarm: 0,
+    waveMs: WAVE_DURATION_MS,
+    wave: 1,
   },
   started: false,
   restartRequested: false,
@@ -89,8 +95,11 @@ export function requestRestart() {
   patchHud({
     playing: true,
     dead: false,
+    waveClear: false,
     hp: 100,
     swarm: 0,
     kills: 0,
+    waveMs: WAVE_DURATION_MS,
+    wave: 1,
   });
 }

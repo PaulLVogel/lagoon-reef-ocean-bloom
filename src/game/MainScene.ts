@@ -6,8 +6,10 @@ import {
   HUD_TICK_MS,
   MAX_ENEMIES,
   PLAYER_IFRAME_MS,
+  SPAWN_INTERVAL_MIN_MS,
   SPAWN_INTERVAL_MS,
   TILE,
+  WAVE_DURATION_MS,
   WORLD_SIZE,
 } from "./constants";
 import { Enemy } from "./Enemy";
@@ -26,6 +28,8 @@ export class MainScene extends Phaser.Scene {
   private iFrameUntil = 0;
   private kills = 0;
   private dead = false;
+  private waveClear = false;
+  private waveMs = WAVE_DURATION_MS;
   private hudAcc = 0;
   private unbindKeys: (() => void) | null = null;
   private floor!: Phaser.GameObjects.TileSprite;
@@ -41,6 +45,8 @@ export class MainScene extends Phaser.Scene {
     this.iFrameUntil = 0;
     this.kills = 0;
     this.dead = false;
+    this.waveClear = false;
+    this.waveMs = WAVE_DURATION_MS;
     this.enemies = [];
   }
 
@@ -67,54 +73,87 @@ export class MainScene extends Phaser.Scene {
       kills: 0,
       swarm: 0,
       dead: false,
+      waveClear: false,
+      waveMs: WAVE_DURATION_MS,
+      wave: 1,
     });
   }
 
   update(time: number, delta: number) {
-    if (this.dead) {
+    if (this.dead || this.waveClear) {
       const bucket = runtime();
       if (bucket.restartRequested) {
         bucket.restartRequested = false;
         this.scene.restart();
       }
-      return;
+      if (this.dead) return;
     }
+
     const dt = Math.min(delta, 50) / 1000;
     const move = sampleMove();
-    const combatOn = isGameStarted();
+    const combatOn = isGameStarted() && !this.waveClear && !this.dead;
     const aim = this.nearestEnemy();
     this.player.update(dt, move.x, move.y, time, aim, combatOn);
+
     if (combatOn) {
-      this.spawnAcc += delta;
-      if (this.spawnAcc >= SPAWN_INTERVAL_MS && this.livingCount() < MAX_ENEMIES) {
-        this.spawnAcc = 0;
-        this.spawnEnemyOutsideView();
+      this.waveMs = Math.max(0, this.waveMs - delta);
+      if (this.waveMs <= 0) {
+        this.endWave();
+      } else {
+        this.spawnAcc += delta;
+        const interval = this.spawnInterval();
+        if (this.spawnAcc >= interval && this.livingCount() < MAX_ENEMIES) {
+          this.spawnAcc = 0;
+          this.spawnEnemyOutsideView();
+        }
+        for (const e of this.enemies) {
+          if (e.alive) e.chase(this.player.x, this.player.y, dt);
+        }
+        this.shots.update(dt, (x, y, dmg, r) => this.hitEnemiesAt(x, y, dmg, r));
+        for (const e of this.enemies) {
+          if (!e.alive) continue;
+          const bladeDmg = this.player.bladeHits(e.x, e.y, e.radius, time);
+          if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
+        }
+        this.checkPlayerContact(time);
+        this.pruneDead();
       }
-      for (const e of this.enemies) {
-        if (e.alive) e.chase(this.player.x, this.player.y, dt);
-      }
-      this.shots.update(dt, (x, y, dmg, r) => this.hitEnemiesAt(x, y, dmg, r));
-      for (const e of this.enemies) {
-        if (!e.alive) continue;
-        const bladeDmg = this.player.bladeHits(e.x, e.y, e.radius, time);
-        if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
-      }
-      this.checkPlayerContact(time);
-      this.pruneDead();
     }
+
     this.hudAcc += delta;
     if (this.hudAcc >= HUD_TICK_MS) {
       this.hudAcc = 0;
-      if (combatOn) {
+      if (isGameStarted()) {
         patchHud({
           speed: Math.round(Math.hypot(this.player.vx, this.player.vy)),
           segments: this.player.segments.length,
           hp: this.playerHp,
           kills: this.kills,
           swarm: this.livingCount(),
+          waveMs: this.waveMs,
+          waveClear: this.waveClear,
         });
       }
     }
+  }
+
+  private spawnInterval() {
+    const t = 1 - this.waveMs / WAVE_DURATION_MS;
+    return Phaser.Math.Linear(SPAWN_INTERVAL_MS, SPAWN_INTERVAL_MIN_MS, t);
+  }
+
+  private endWave() {
+    this.waveMs = 0;
+    this.waveClear = true;
+    for (const e of this.enemies) e.destroy();
+    this.enemies = [];
+    this.shots.clear();
+    patchHud({
+      waveMs: 0,
+      swarm: 0,
+      waveClear: true,
+      playing: true,
+    });
   }
 
   private livingCount() {
@@ -207,7 +246,7 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
-    patchHud({ hp: 0, swarm: 0, playing: false, dead: true });
+    patchHud({ hp: 0, swarm: 0, playing: false, dead: true, waveClear: false });
   }
 
   private pruneDead() {

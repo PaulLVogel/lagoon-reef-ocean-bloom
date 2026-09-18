@@ -4,7 +4,7 @@
 
 Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user asked this turn.
 
-- Do **not** rebuild Phase 1–3, the Vite/Phaser shell, or the whole game.
+- Do **not** rebuild Phase 1–4, the Vite/Phaser shell, or the whole game.
 - Do **not** invent extra phases, refactors, or new folders unless asked.
 - Change the smallest set of files that implements the request.
 - Push those files to **canonical GitHub** `PaulLVogel/lagoon-reef-ocean-bloom` branch **`main`**.
@@ -33,6 +33,6 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 ### [x] Phase 1 — Engine & Movement
 ### [x] Phase 2 — Weapons
 ### [x] Phase 3 — Enemy swarm + death/restart
-### [ ] Phase 4 — 30s wave timer, ramp spawns, despawn + pause at 00:00
+### [x] Phase 4 — 30s wave timer, ramp spawns, despawn + pause at 00:00
 ### [ ] Phase 5 — Shop overlay
 ### [ ] Phase 6 — EXP gems / economy
