@@ -7,6 +7,7 @@ import {
   HISTORY_STRIDE,
   PICKUP_RADIUS_BASE,
   PICKUP_RADIUS_STEP,
+  PLAYER_IFRAME_MS,
   SEGMENT_RADIUS,
   WORLD_SIZE,
 } from "./constants";
@@ -25,14 +26,29 @@ type BladePair = {
   blades: Phaser.GameObjects.Rectangle[];
 };
 
+export type BodySegment = {
+  sprite: Phaser.GameObjects.Container;
+  segmentSprite: Phaser.GameObjects.Arc;
+  hp: number;
+  maxHp: number;
+  isActive: boolean;
+  healthBar: Phaser.GameObjects.Graphics;
+  lastHit: number;
+};
+
 const BLADE_ORBIT = 34;
 const BLADE_RADIUS = 11;
 const BLASTER_SPEED = 520;
 const TURRET_SPEED = 460;
+const SEGMENT_MAX_HP = 100;
+const DEAD_TINT = 0x555555;
+const BAR_W = 22;
+const BAR_H = 3;
 
 export class SnakePlayer {
   readonly head: Phaser.GameObjects.Container;
   readonly segments: Phaser.GameObjects.Container[] = [];
+  readonly body: BodySegment[] = [];
   readonly positionHistory: HistoryPoint[] = [];
   readonly weapons: Weapon[] = [];
 
@@ -136,6 +152,24 @@ export class SnakePlayer {
     return parts;
   }
 
+  /** Closest point on the snake (head or any segment, including greyed-out). */
+  nearestChasePoint(x: number, y: number): { x: number; y: number } {
+    let bx = this.head.x;
+    let by = this.head.y;
+    let best = (bx - x) * (bx - x) + (by - y) * (by - y);
+    for (const seg of this.segments) {
+      const dx = seg.x - x;
+      const dy = seg.y - y;
+      const d = dx * dx + dy * dy;
+      if (d < best) {
+        best = d;
+        bx = seg.x;
+        by = seg.y;
+      }
+    }
+    return { x: bx, y: by };
+  }
+
   addSegment() {
     this.spawnSegment();
     this.ensureHistoryCapacity();
@@ -176,6 +210,28 @@ export class SnakePlayer {
     return amount;
   }
 
+  damageSegment(index: number, amount: number, now: number): boolean {
+    const s = this.body[index];
+    if (!s || !s.isActive || s.hp <= 0) return false;
+    if (now < s.lastHit) return false;
+    s.lastHit = now + PLAYER_IFRAME_MS;
+    s.hp = Math.max(0, s.hp - amount);
+    this.paintHealthBar(s);
+    if (s.hp <= 0) this.greyOut(s);
+    return true;
+  }
+
+  reviveAll() {
+    for (const s of this.body) {
+      s.hp = s.maxHp;
+      s.isActive = true;
+      s.lastHit = 0;
+      s.segmentSprite.clearTint();
+      s.healthBar.setVisible(true);
+      this.paintHealthBar(s);
+    }
+  }
+
   update(dt: number, ax: number, ay: number, now: number, enemies: EnemyScan[], combatOn: boolean) {
     const moving = ax !== 0 || ay !== 0;
     if (moving) {
@@ -213,6 +269,8 @@ export class SnakePlayer {
     let dealt = 0;
     for (const w of this.weapons) {
       if (w.type !== "blade") continue;
+      const host = this.body[w.segmentIndex];
+      if (!host || !host.isActive) continue;
       if (now - w.lastFired < w.fireRate) continue;
       const pair = this.bladePairs.find((p) => p.segmentIndex === w.segmentIndex);
       if (!pair) continue;
@@ -232,11 +290,15 @@ export class SnakePlayer {
 
   destroy() {
     this.head.destroy(true);
-    for (const seg of this.segments) seg.destroy(true);
+    for (const s of this.body) {
+      s.healthBar.destroy();
+      s.sprite.destroy(true);
+    }
     for (const pair of this.bladePairs) {
       for (const b of pair.blades) b.destroy();
     }
     this.segments.length = 0;
+    this.body.length = 0;
     this.positionHistory.length = 0;
     this.bladePairs.length = 0;
     this.weapons.length = 0;
@@ -248,11 +310,50 @@ export class SnakePlayer {
     const container = this.scene.add.container(this.head.x, this.head.y);
     container.setDepth(18 - Math.min(i, 10));
     const halo = this.scene.add.circle(0, 0, SEGMENT_RADIUS + 5, color, 0.16);
-    const body = this.scene.add.circle(0, 0, SEGMENT_RADIUS, color);
-    body.setStrokeStyle(1.5, COLOR.segmentCore, 0.55);
+    const segmentSprite = this.scene.add.circle(0, 0, SEGMENT_RADIUS, color);
+    segmentSprite.setStrokeStyle(1.5, COLOR.segmentCore, 0.55);
     const core = this.scene.add.circle(-2, 0, 4, COLOR.segmentCore, 0.85);
-    container.add([halo, body, core]);
+    container.add([halo, segmentSprite, core]);
+    const healthBar = this.scene.add.graphics();
+    healthBar.setDepth(22);
+    const state: BodySegment = {
+      sprite: container,
+      segmentSprite,
+      hp: SEGMENT_MAX_HP,
+      maxHp: SEGMENT_MAX_HP,
+      isActive: true,
+      healthBar,
+      lastHit: 0,
+    };
+    this.paintHealthBar(state);
+    this.body.push(state);
     this.segments.push(container);
+  }
+
+  private greyOut(s: BodySegment) {
+    s.isActive = false;
+    s.hp = 0;
+    s.segmentSprite.setTint(DEAD_TINT);
+    s.healthBar.clear();
+    s.healthBar.setVisible(false);
+  }
+
+  private paintHealthBar(s: BodySegment) {
+    const g = s.healthBar;
+    g.clear();
+    if (!s.isActive || s.hp <= 0) {
+      g.setVisible(false);
+      return;
+    }
+    g.setVisible(true);
+    const ox = -BAR_W / 2;
+    const oy = -SEGMENT_RADIUS - 11;
+    g.fillStyle(0x111318, 0.85);
+    g.fillRect(ox, oy, BAR_W, BAR_H);
+    const t = s.hp / s.maxHp;
+    const color = t > 0.5 ? 0x4ade80 : t > 0.25 ? 0xfbbf24 : 0xf87171;
+    g.fillStyle(color, 1);
+    g.fillRect(ox, oy, BAR_W * t, BAR_H);
   }
 
   private armSegment(index: number, type: Weapon["type"]) {
@@ -289,6 +390,8 @@ export class SnakePlayer {
         const ang = this.bladeAngle + i * Math.PI;
         blade.setPosition(host.x + Math.cos(ang) * BLADE_ORBIT, host.y + Math.sin(ang) * BLADE_ORBIT);
         blade.setRotation(ang + Math.PI / 2);
+        const live = this.body[pair.segmentIndex]?.isActive !== false;
+        blade.setAlpha(live ? 1 : 0.28);
       });
     }
   }
@@ -312,8 +415,9 @@ export class SnakePlayer {
   private tickWeapons(now: number, enemies: EnemyScan[]) {
     for (const w of this.weapons) {
       if (w.type === "blade") continue;
+      const state = this.body[w.segmentIndex];
       const seg = this.segments[w.segmentIndex];
-      if (!seg) continue;
+      if (!seg || !state || !state.isActive) continue;
       if (now - w.lastFired < w.fireRate) continue;
 
       const target = this.nearestEnemyTo(seg.x, seg.y, enemies);
@@ -353,6 +457,10 @@ export class SnakePlayer {
       const ahead = hist[aheadIdx]!;
       const ang = Math.atan2(ahead.y - pos.y, ahead.x - pos.x);
       if (Number.isFinite(ang)) seg.setRotation(ang);
+      const state = this.body[i];
+      if (state) {
+        state.healthBar.setPosition(pos.x, pos.y);
+      }
     }
   }
 

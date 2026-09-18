@@ -15,11 +15,12 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **per-segment independent targeting** on `main` (each trailing segment is its own party member; shots ignore head aim/location).
+Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating bars, dead segments still trail, enemies chase nearest body part).
 
 ## Rules
-- Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
-- Segment weapons: each trailing segment is an independent party member. Targeting and shots use **that segment's (x, y)** only — never head position or facing.
+- Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
+- Segment HP: 100 each, floating Graphics bars, `isActive` false at 0 (no fire, tint 0x555555, hide bar). `reviveAll()` on wave end. Dead segments do not take more damage.
+- Segment weapons: each trailing **active** segment is an independent party member. Targeting and shots use **that segment's (x, y)** only — never head position or facing.
 - `SnakePlayer` owns player, trail, weapons, `heal()`, pickup radius, segment vacuum. `MainScene` owns enemies, bullets, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand).
 - Phaser: `import * as Phaser from "phaser"`.
@@ -30,7 +31,7 @@ Last shipped: **per-segment independent targeting** on `main` (each trailing seg
 ## File map
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, segments, trail, per-segment weapons + independent target/fire, `heal()`, pickup ring, `boostPickupRadius()`, `enableSegmentVacuum()` |
+| `src/game/SnakePlayer.ts` | head, segments, trail, per-segment HP/bars/grey-out, weapons + independent target/fire, `heal()`, `reviveAll()`, pickup ring |
 | `src/game/Weapon.ts` | `Weapon` / `FireEvent` / `EnemyScan` / `makeWeapon` / `defaultLoadout` |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, `spawnFromKill`, collect+Fever+blip |
 | `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum, `collectHead` |

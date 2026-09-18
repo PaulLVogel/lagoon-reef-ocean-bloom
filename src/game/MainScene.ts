@@ -11,6 +11,7 @@ import {
   MAX_ENEMIES,
   PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS,
+  SEGMENT_RADIUS,
   SPAWN_INTERVAL_MIN_MS,
   SPAWN_INTERVAL_MS,
   TILE,
@@ -172,7 +173,9 @@ export class MainScene extends Phaser.Scene {
           this.spawnEnemyOutsideView();
         }
         for (const e of this.enemies) {
-          if (e.alive) e.chase(this.player.x, this.player.y, dt);
+          if (!e.alive) continue;
+          const t = this.player.nearestChasePoint(e.x, e.y);
+          e.chase(t.x, t.y, dt);
         }
         this.shots.update(dt, (x, y, dmg, r) => this.hitEnemiesAt(x, y, dmg, r));
         for (const e of this.enemies) {
@@ -221,6 +224,7 @@ export class MainScene extends Phaser.Scene {
   private endWave() {
     this.waveMs = 0;
     this.waveClear = true;
+    this.player.reviveAll();
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
@@ -434,14 +438,17 @@ export class MainScene extends Phaser.Scene {
   }
 
   private checkPlayerContact(now: number) {
-    if (now < this.iFrameUntil) return;
-    const parts = this.player.getParts();
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      for (const p of parts) {
-        if (!e.overlaps(p.x, p.y, p.r)) continue;
-        this.hurtPlayer(ENEMY_CONTACT_DAMAGE, now);
-        return;
+      const hitHead =
+        now >= this.iFrameUntil &&
+        e.overlaps(this.player.x, this.player.y, this.player.getRadius());
+      if (hitHead) this.hurtPlayer(ENEMY_CONTACT_DAMAGE, now);
+      for (let i = 0; i < this.player.body.length; i++) {
+        const s = this.player.body[i]!;
+        if (!e.overlaps(s.sprite.x, s.sprite.y, SEGMENT_RADIUS)) continue;
+        if (!s.isActive || s.hp <= 0) continue;
+        this.player.damageSegment(i, ENEMY_CONTACT_DAMAGE, now);
       }
     }
   }

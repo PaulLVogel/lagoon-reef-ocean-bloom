@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **per-segment independent targeting** on `main` (each trailing segment is its own party member; shots ignore head aim/location).
+Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating bars, dead segments still trail, enemies chase nearest body part).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -37,7 +37,8 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
-*   **Segment weapons:** Every trailing segment holds its own `Weapon` (`type`, `fireRate`, `lastFired`). Targeting and firing use **that segment's (x, y)** only. Ignore head position and head facing. Do not retarget from the head.
+*   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`), hides its bar, and stops firing, but **still follows `positionHistory`**. Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, bars, and firing. Head contact still damages player HP; segment contact damages that segment only.
+*   **Enemy chase:** Enemies seek the **nearest** head or segment (including greyed-out body), not only the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
 *   **Assets:** Phaser geometric shapes only unless PNGs are requested.

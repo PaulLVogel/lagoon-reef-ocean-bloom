@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Shop skip hook** on `main` (tactical skip + interest, priced-out pity +10 HP / +2g, freeze 3 offers, gray cards + green Next Wave pulse).
+Last shipped: **segment HP / grey-out** on `main` (per-segment 100 HP, floating bars, dead segments still trail, enemies chase nearest body part).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -37,6 +37,8 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
+*   **Segment HP:** Each trailing segment has its own `hp` / `maxHp` (100) and `isActive`. At 0 HP it greys out (`setTint(0x555555)`), hides its bar, and stops firing, but **still follows `positionHistory`**. Enemies pass through dead segments without further damage. `reviveAll()` at wave end restores HP, tint, bars, and firing. Head contact still damages player HP; segment contact damages that segment only.
+*   **Enemy chase:** Enemies seek the **nearest** head or segment (including greyed-out body), not only the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
 *   **Assets:** Phaser geometric shapes only unless PNGs are requested.
@@ -49,7 +51,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 
 ### [x] Phase 2: Weapons
-`Weapon` interface. Seg 0 blaster / 1 turret / 2 blades. Shots originate at that segment.
+`Weapon` interface. Every trailing segment is an independent party member (cycle blaster / turret / blade). Each scans alive enemies from **its own (x, y)** and fires from that point toward its unique nearest target. Head aim/location is ignored. `positionHistory` trail is unchanged.
 
 ### [x] Phase 3: Enemy Swarm
 `Enemy` class. Spawn outside camera. Chase head. Contact vs head or any segment. Death overlay + Restart (`scene.restart()`).
@@ -86,3 +88,7 @@ Collect hook: pickup radius larger than head hitbox (shop `pickup_radius`), high
 - Priced-out UI: cards gray + `.shop-next-pulse` on Next Wave when nothing is affordable.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted / rerolled).
 - Death Restart zeros gold, `purchaseHistory`, and freeze.
+- HUD gold display: `goldDisplay` ticks from the pre-buy value to the ledger with a 300ms Phaser tween (`GOLD_TALLY_MS`) on pick or reroll. Ledger `gold` stays instant for shop math.
+- Shop-phase late gems: while `waveClear`, `collectHead` still runs. Gem gold goes to `nextWaveBank` (not `hud.gold`) so shop costs / interest / pity stay stable. Bank dumps into gold at `startNextWave`.
+- Credit card (`credit_card`): rare overdraft offer. Always purchasable. Deducts cost even if gold goes negative (red HUD). Grants +2 blaster segments and +18% speed. Once per run. Interest uses `max(0, gold)` so debt earns none.
+- Lifetime wealth: `totalGoldEarned` increments on gem collect, vacuum, interest, and pity. Purchases never subtract it. Death overlay shows earned + g/kill efficiency, separate from the spending pool.
