@@ -36,6 +36,15 @@ export const MAGNET_SPEED = 420;
 export const HEALTH_SIZE = 11;
 export const MAGNET_SIZE = 12;
 
+/** Collect reach is larger than the physical head hitbox. */
+export const PICKUP_RADIUS_BASE = HEAD_RADIUS + GEM_RADIUS + 14;
+export const PICKUP_RADIUS_STEP = 16;
+export const SEGMENT_VACUUM_RADIUS = 52;
+export const SEGMENT_VACUUM_SPEED = 260;
+export const COMBO_WINDOW_MS = 2000;
+export const COMBO_TRIGGER = 10;
+export const PICKUP_FLOAT_MS = 500;
+
 export const COLOR = {
   arena: 0x0c0e12,
   grid: 0x171b22,

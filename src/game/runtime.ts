@@ -19,6 +19,8 @@ export type HudSnap = {
   wave: number;
   shopOffers: ShopOffer[];
   shopPicked: string | null;
+  fever: boolean;
+  combo: number;
 };
 
 type Bucket = {
@@ -51,6 +53,8 @@ const emptyHud = (): HudSnap => ({
   wave: 1,
   shopOffers: [],
   shopPicked: null,
+  fever: false,
+  combo: 0,
 });
 
 const fallback: Bucket = {
@@ -129,6 +133,8 @@ export function requestRestart() {
     wave: 1,
     shopOffers: [],
     shopPicked: null,
+    fever: false,
+    combo: 0,
   });
 }
 
