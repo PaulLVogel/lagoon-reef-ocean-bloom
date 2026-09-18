@@ -16,6 +16,12 @@ export const BASE_SPEED = 240;
 export const PLAYER_MAX_HP = 100;
 export const SEGMENT_MAX_HP = 100;
 
+/** Phaser spritesheet key for the halfling bard head (16×16 × 4 walk frames). */
+export const BARD_SHEET = "vs-bard";
+export const BARD_FRAME_SIZE = 16;
+/** Integer nearest-neighbor scale (16×4 = 64px). Hitbox stays HEAD_RADIUS. */
+export const BARD_SCALE = 4;
+
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
 export const BULLET_POOL = 96;
