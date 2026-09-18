@@ -2,6 +2,10 @@ export type WeaponType = "single_shot" | "cone_burst" | "melee_slash";
 
 export type WeaponStat = "damage" | "range" | "fireRate";
 
+export type WeaponTier = 1 | 2 | 3;
+
+export const WEAPON_TIER_CAP: WeaponTier = 3;
+
 export interface Weapon {
   type: WeaponType;
   segmentIndex: number;
@@ -12,6 +16,7 @@ export interface Weapon {
   damageMultiplier: number;
   rangeMultiplier: number;
   fireRateMultiplier: number;
+  tier: WeaponTier;
 }
 
 /** Alive-enemy snapshot used for per-segment targeting. Not the head. */
@@ -47,9 +52,15 @@ const PROTOS: Record<WeaponType, Proto> = {
   melee_slash: { baseDamage: 11, baseRange: 92, baseFireRate: 320 },
 };
 
-const CYCLE: WeaponType[] = ["single_shot", "cone_burst", "melee_slash"];
+export const WEAPON_CYCLE: WeaponType[] = ["single_shot", "cone_burst", "melee_slash"];
 
-export function makeWeapon(type: WeaponType, segmentIndex: number): Weapon {
+export const WEAPON_LABEL: Record<WeaponType, string> = {
+  single_shot: "Single shot",
+  cone_burst: "Cone burst",
+  melee_slash: "Melee slash",
+};
+
+export function makeWeapon(type: WeaponType, segmentIndex: number, tier: WeaponTier = 1): Weapon {
   const proto = PROTOS[type];
   return {
     type,
@@ -61,20 +72,27 @@ export function makeWeapon(type: WeaponType, segmentIndex: number): Weapon {
     damageMultiplier: 1,
     rangeMultiplier: 1,
     fireRateMultiplier: 1,
+    tier,
   };
 }
 
-/** Exactly one distinct weapon per trailing segment. Cycles the three types. */
+/** Head-only start: no trailing loadout. */
 export function defaultLoadout(segmentCount: number): Weapon[] {
-  return Array.from({ length: segmentCount }, (_, i) => makeWeapon(CYCLE[i % CYCLE.length]!, i));
+  return Array.from({ length: segmentCount }, (_, i) => makeWeapon(WEAPON_CYCLE[i % WEAPON_CYCLE.length]!, i));
+}
+
+export function randomWeaponType(): WeaponType {
+  return WEAPON_CYCLE[Math.floor(Math.random() * WEAPON_CYCLE.length)]!;
 }
 
 export function weaponDamage(w: Weapon) {
-  return Math.max(1, Math.round(w.baseDamage * w.damageMultiplier));
+  const tierMul = 1 + (w.tier - 1) * 0.55;
+  return Math.max(1, Math.round(w.baseDamage * w.damageMultiplier * tierMul));
 }
 
 export function weaponRange(w: Weapon) {
-  return w.baseRange * w.rangeMultiplier;
+  const tierMul = 1 + (w.tier - 1) * 0.18;
+  return w.baseRange * w.rangeMultiplier * tierMul;
 }
 
 /** Cooldown in ms. fireRateMultiplier > 1 fires more often. */
@@ -83,5 +101,11 @@ export function weaponCooldown(w: Weapon) {
 }
 
 export function nextWeaponType(index: number): WeaponType {
-  return CYCLE[index % CYCLE.length]!;
+  return WEAPON_CYCLE[index % WEAPON_CYCLE.length]!;
+}
+
+export function bumpTier(w: Weapon): WeaponTier {
+  const next = Math.min(WEAPON_TIER_CAP, (w.tier + 1) as WeaponTier) as WeaponTier;
+  w.tier = next;
+  return next;
 }

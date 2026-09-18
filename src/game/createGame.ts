@@ -1,22 +1,19 @@
 import * as Phaser from "phaser";
-import { COLOR } from "./constants";
+import { COLOR, GAME_HEIGHT, GAME_WIDTH } from "./constants";
 import { MainScene } from "./MainScene";
 
 export function createGame(parent: HTMLElement) {
-  const width = Math.max(parent.clientWidth, 320);
-  const height = Math.max(parent.clientHeight, 240);
-
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    width,
-    height,
+    width: GAME_WIDTH,
+    height: GAME_HEIGHT,
     backgroundColor: COLOR.arena,
     scale: {
-      mode: Phaser.Scale.RESIZE,
+      mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
-      width,
-      height,
+      width: GAME_WIDTH,
+      height: GAME_HEIGHT,
     },
     render: {
       antialias: true,

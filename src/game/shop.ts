@@ -1,3 +1,9 @@
+import {
+  randomWeaponType,
+  WEAPON_LABEL,
+  type WeaponType,
+} from "./Weapon";
+
 export type ShopKind =
   | "add_blaster"
   | "add_2_blasters"
@@ -19,6 +25,9 @@ export type ShopOffer = {
   blurb: string;
   cost: number;
   rarity: ShopRarity;
+  weaponType?: WeaponType;
+  merge?: boolean;
+  mergeToTier?: number;
 };
 
 type CatalogItem = Omit<ShopOffer, "id">;
@@ -68,8 +77,8 @@ const CATALOG: CatalogItem[] = [
   },
   {
     kind: "add_blaster",
-    title: "New blaster segment",
-    blurb: "Grow the tail. Extra barrel fires along facing.",
+    title: "New weapon segment",
+    blurb: "Grow the tail with one rolled weapon, or merge a duplicate up a tier.",
     cost: 36,
     rarity: "rare",
   },
@@ -82,15 +91,15 @@ const CATALOG: CatalogItem[] = [
   },
   {
     kind: "add_2_blasters",
-    title: "Add 2 Blaster Segments",
-    blurb: "Legendary: grow two armed barrels at once.",
+    title: "Add 2 weapon segments",
+    blurb: "Legendary: two rolled weapons, each merging if you already own the type.",
     cost: 88,
     rarity: "legendary",
   },
   {
     kind: "credit_card",
     title: "Credit card",
-    blurb: "Overdraft: +2 blaster segments and +18% speed now. Gold may go negative. No interest while in debt.",
+    blurb: "Overdraft: +2 rolled weapons and +18% speed now. Gold may go negative.",
     cost: 48,
     rarity: "rare",
   },
@@ -105,6 +114,13 @@ export const SHOP_PITY_GOLD = 2;
 
 const WEIGHT_LEGENDARY = 5;
 const WEIGHT_RARE = 25;
+
+export type ShopOwned = {
+  segmentVacuum?: boolean;
+  canMerge?: (type: WeaponType) => boolean;
+  mergeToTier?: (type: WeaponType) => number;
+  segmentCount?: number;
+};
 
 export function purchasesOf(history: ShopKind[], kind: ShopKind) {
   return history.filter((k) => k === kind).length;
@@ -131,29 +147,73 @@ function pickOne<T>(list: T[]): T | undefined {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function decorateWeaponOffer(item: CatalogItem, owned: ShopOwned): CatalogItem {
+  if (item.kind !== "add_blaster") return item;
+  const weaponType = randomWeaponType();
+  const merge = owned.canMerge?.(weaponType) ?? false;
+  const mergeToTier = owned.mergeToTier?.(weaponType) ?? 2;
+  const label = WEAPON_LABEL[weaponType];
+  if (merge) {
+    return {
+      ...item,
+      weaponType,
+      merge: true,
+      mergeToTier,
+      title: `Merge ${label} → T${mergeToTier}`,
+      blurb: `Combine with your ${label} instead of growing a new segment. Caps at Tier 3.`,
+    };
+  }
+  return {
+    ...item,
+    weaponType,
+    merge: false,
+    title: `New ${label} segment`,
+    blurb: `Grow the tail. This segment fires only ${label.toLowerCase()}.`,
+  };
+}
+
 export function rollShopOffers(
   wave: number,
   segments: number,
-  owned: { segmentVacuum?: boolean } = {},
+  owned: ShopOwned = {},
   history: ShopKind[] = [],
+  held: (ShopOffer | null)[] = [null, null, null],
 ): ShopOffer[] {
   const pool = CATALOG.filter((c) => {
-    if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS) return false;
-    if (c.kind === "add_2_blasters" && segments + 2 > MAX_SEGMENTS) return false;
+    if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS && !owned.canMerge) return false;
+    if (c.kind === "add_2_blasters" && segments + 2 > MAX_SEGMENTS && !owned.canMerge) return false;
     if (c.kind === "segment_vacuum" && owned.segmentVacuum) return false;
     if (c.kind === "credit_card" && purchasesOf(history, "credit_card") > 0) return false;
     return true;
   });
 
   const taken = new Set<ShopKind>();
+  for (const slot of held) {
+    if (slot) taken.add(slot.kind);
+  }
+
   const offers: ShopOffer[] = [];
   for (let i = 0; i < 3; i++) {
+    const kept = held[i];
+    if (kept) {
+      const item = CATALOG.find((c) => c.kind === kept.kind) ?? kept;
+      const deco = kept.kind === "add_blaster" && kept.weaponType
+        ? { ...item, weaponType: kept.weaponType, merge: kept.merge, mergeToTier: kept.mergeToTier, title: kept.title, blurb: kept.blurb }
+        : item;
+      offers.push({
+        ...deco,
+        cost: scaledOfferCost(item.cost, wave, purchasesOf(history, item.kind)),
+        id: `${item.kind}-w${wave}-held-${i}`,
+      });
+      continue;
+    }
     const rarity = rollRarity();
     const unused = pool.filter((c) => !taken.has(c.kind));
     const preferred = unused.filter((c) => c.rarity === rarity);
-    const item = pickOne(preferred.length ? preferred : unused);
-    if (!item) break;
-    taken.add(item.kind);
+    const raw = pickOne(preferred.length ? preferred : unused);
+    if (!raw) break;
+    taken.add(raw.kind);
+    const item = decorateWeaponOffer(raw, owned);
     offers.push({
       ...item,
       cost: scaledOfferCost(item.cost, wave, purchasesOf(history, item.kind)),
@@ -177,19 +237,25 @@ export function canAffordAny(gold: number, offers: ShopOffer[]) {
 }
 
 export function offersFromKinds(
-  kinds: ShopKind[],
+  kinds: (ShopKind | null)[],
   wave: number,
   history: ShopKind[] = [],
+  prior: ShopOffer[] = [],
 ): ShopOffer[] {
-  const offers: ShopOffer[] = [];
-  kinds.forEach((kind, i) => {
+  return kinds.map((kind, i) => {
+    if (!kind) return null;
     const item = CATALOG.find((c) => c.kind === kind);
-    if (!item) return;
-    offers.push({
+    if (!item) return null;
+    const prev = prior[i];
+    return {
       ...item,
+      weaponType: prev?.weaponType,
+      merge: prev?.merge,
+      mergeToTier: prev?.mergeToTier,
+      title: prev?.title ?? item.title,
+      blurb: prev?.blurb ?? item.blurb,
       cost: scaledOfferCost(item.cost, wave, purchasesOf(history, kind)),
       id: `${item.kind}-w${wave}-held-${i}`,
-    });
-  });
-  return offers;
+    } as ShopOffer;
+  }).filter((o): o is ShopOffer => o !== null);
 }

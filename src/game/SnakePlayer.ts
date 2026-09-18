@@ -12,12 +12,13 @@ import {
   WORLD_SIZE,
 } from "./constants";
 import {
-  defaultLoadout,
+  bumpTier,
   makeWeapon,
-  nextWeaponType,
+  randomWeaponType,
   weaponCooldown,
   weaponDamage,
   weaponRange,
+  WEAPON_TIER_CAP,
   type EnemyScan,
   type FireEvent,
   type Weapon,
@@ -44,14 +45,14 @@ const CONE_SPREAD = 0.22;
 const SLASH_ARC = 1.15;
 const SEGMENT_MAX_HP = 100;
 const DEAD_TINT = 0x555555;
-const BAR_W = 22;
-const BAR_H = 3;
+const HEAD_WEAPON_INDEX = -1;
 
 export class SnakePlayer {
   readonly head: Phaser.GameObjects.Container;
   readonly segments: Phaser.GameObjects.Container[] = [];
   readonly body: BodySegment[] = [];
   readonly positionHistory: HistoryPoint[] = [];
+  /** Exactly one weapon per trailing segment, plus the head's single-shot. */
   readonly weapons: Weapon[] = [];
 
   speed = BASE_SPEED;
@@ -100,9 +101,10 @@ export class SnakePlayer {
     );
     const eyeY = scene.add.circle(4, -5, 2.4, COLOR.eye);
     const eyeX = scene.add.circle(4, 5, 2.4, COLOR.eye);
-    this.head.add([this.pickupRing, this.headGlow, headBody, this.snout, eyeY, eyeX]);
+    const barrel = scene.add.rectangle(HEAD_RADIUS + 4, 0, 12, 4, COLOR.singleShot);
+    this.head.add([this.pickupRing, this.headGlow, headBody, this.snout, eyeY, eyeX, barrel]);
 
-    const maxHistory = (segmentCount + 4) * this.historyStride + 48;
+    const maxHistory = (Math.max(segmentCount, 4) + 4) * this.historyStride + 48;
     for (let i = maxHistory - 1; i >= 0; i--) {
       this.positionHistory.push({
         x: x - i * 3.2,
@@ -110,10 +112,9 @@ export class SnakePlayer {
       });
     }
 
-    const loadout = defaultLoadout(segmentCount);
+    this.weapons.push(makeWeapon("single_shot", HEAD_WEAPON_INDEX, 1));
     for (let i = 0; i < segmentCount; i++) {
-      this.spawnSegment();
-      this.armSegment(i, loadout[i]!.type);
+      this.addArmedSegment(randomWeaponType());
     }
     this.layoutSegments();
   }
@@ -170,6 +171,21 @@ export class SnakePlayer {
     return { x: bx, y: by };
   }
 
+  ownedWeaponTypes(): WeaponType[] {
+    return this.weapons.map((w) => w.type);
+  }
+
+  canMerge(type: WeaponType) {
+    return this.weapons.some((w) => w.type === type && w.tier < WEAPON_TIER_CAP);
+  }
+
+  mergePreviewTier(type: WeaponType) {
+    const match = this.weapons
+      .filter((w) => w.type === type && w.tier < WEAPON_TIER_CAP)
+      .sort((a, b) => a.tier - b.tier)[0];
+    return match ? Math.min(WEAPON_TIER_CAP, match.tier + 1) : 1;
+  }
+
   addSegment() {
     this.spawnSegment();
     this.ensureHistoryCapacity();
@@ -179,7 +195,24 @@ export class SnakePlayer {
   addArmedSegment(type?: WeaponType) {
     this.addSegment();
     const index = this.segments.length - 1;
-    this.armSegment(index, type ?? nextWeaponType(index));
+    this.armSegment(index, type ?? randomWeaponType());
+  }
+
+  /**
+   * Brotato merge: if this type already exists below T3, bump that weapon.
+   * Otherwise grow a new trailing segment with exactly one rolled type.
+   */
+  grantWeapon(type: WeaponType): "merged" | "added" {
+    const existing = this.weapons
+      .filter((w) => w.type === type && w.tier < WEAPON_TIER_CAP)
+      .sort((a, b) => a.tier - b.tier)[0];
+    if (existing) {
+      bumpTier(existing);
+      this.paintTier(existing);
+      return "merged";
+    }
+    this.addArmedSegment(type);
+    return "added";
   }
 
   /** Shop / item hook. Multiplies a single segment weapon's damage, range, or fire rate. */
@@ -219,7 +252,6 @@ export class SnakePlayer {
     if (now < s.lastHit) return false;
     s.lastHit = now + PLAYER_IFRAME_MS;
     s.hp = Math.max(0, s.hp - amount);
-    this.paintHealthBar(s);
     if (s.hp <= 0) this.greyOut(s);
     return true;
   }
@@ -231,8 +263,6 @@ export class SnakePlayer {
       s.lastHit = 0;
       s.segmentSprite.clearTint();
       s.segmentSprite.setTint(s.baseTint);
-      s.healthBar.setVisible(true);
-      this.paintHealthBar(s);
     }
   }
 
@@ -295,7 +325,8 @@ export class SnakePlayer {
     const core = this.scene.add.circle(-2, 0, 4, COLOR.segmentCore, 0.85);
     container.add([halo, ring, segmentSprite, core]);
     const healthBar = this.scene.add.graphics();
-    healthBar.setDepth(22);
+    healthBar.setVisible(false);
+    healthBar.setActive(false);
     const state: BodySegment = {
       sprite: container,
       segmentSprite,
@@ -306,7 +337,6 @@ export class SnakePlayer {
       lastHit: 0,
       baseTint: color,
     };
-    this.paintHealthBar(state);
     this.body.push(state);
     this.segments.push(container);
   }
@@ -329,24 +359,6 @@ export class SnakePlayer {
     s.healthBar.setVisible(false);
   }
 
-  private paintHealthBar(s: BodySegment) {
-    const g = s.healthBar;
-    g.clear();
-    if (!s.isActive || s.hp <= 0) {
-      g.setVisible(false);
-      return;
-    }
-    g.setVisible(true);
-    const ox = -BAR_W / 2;
-    const oy = -SEGMENT_RADIUS - 11;
-    g.fillStyle(0x111318, 0.85);
-    g.fillRect(ox, oy, BAR_W, BAR_H);
-    const t = s.hp / s.maxHp;
-    const color = t > 0.5 ? 0x4ade80 : t > 0.25 ? 0xfbbf24 : 0xf87171;
-    g.fillStyle(color, 1);
-    g.fillRect(ox, oy, BAR_W * t, BAR_H);
-  }
-
   /** Exactly one weapon per segment. Second arm is ignored. */
   private armSegment(index: number, type: WeaponType) {
     if (this.weapons.some((w) => w.segmentIndex === index)) return;
@@ -357,6 +369,8 @@ export class SnakePlayer {
   private attachMount(index: number, type: WeaponType) {
     const seg = this.segments[index];
     if (!seg) return;
+    if (seg.getData("armed")) return;
+    seg.setData("armed", type);
     if (type === "single_shot") {
       const barrel = this.scene.add.rectangle(11, 0, 14, 5, COLOR.singleShot);
       seg.add(barrel);
@@ -369,6 +383,16 @@ export class SnakePlayer {
       const fang = this.scene.add.triangle(12, 0, 0, -6, 16, 0, 0, 6, COLOR.meleeSlash);
       seg.add(fang);
     }
+  }
+
+  private paintTier(w: Weapon) {
+    if (w.segmentIndex === HEAD_WEAPON_INDEX) {
+      this.head.setScale(1 + (w.tier - 1) * 0.08);
+      return;
+    }
+    const seg = this.segments[w.segmentIndex];
+    if (!seg) return;
+    seg.setScale(1 + (w.tier - 1) * 0.12);
   }
 
   private nearestEnemyTo(x: number, y: number, enemies: EnemyScan[]): EnemyScan | null {
@@ -387,18 +411,28 @@ export class SnakePlayer {
     return best;
   }
 
-  private tickWeapons(now: number, enemies: EnemyScan[]) {
-    for (const w of this.weapons) {
-      const state = this.body[w.segmentIndex];
-      const seg = this.segments[w.segmentIndex];
-      if (!seg || !state || !state.isActive) continue;
-      if (now - w.lastFired < weaponCooldown(w)) continue;
+  private originFor(w: Weapon): { x: number; y: number } | null {
+    if (w.segmentIndex === HEAD_WEAPON_INDEX) return { x: this.head.x, y: this.head.y };
+    const state = this.body[w.segmentIndex];
+    const seg = this.segments[w.segmentIndex];
+    if (!seg || !state || !state.isActive) return null;
+    return { x: seg.x, y: seg.y };
+  }
 
-      const target = this.nearestEnemyTo(seg.x, seg.y, enemies);
+  private tickWeapons(now: number, enemies: EnemyScan[]) {
+    const seen = new Set<number>();
+    for (const w of this.weapons) {
+      if (seen.has(w.segmentIndex)) continue;
+      seen.add(w.segmentIndex);
+      if (now - w.lastFired < weaponCooldown(w)) continue;
+      const origin = this.originFor(w);
+      if (!origin) continue;
+
+      const target = this.nearestEnemyTo(origin.x, origin.y, enemies);
       if (!target) continue;
 
-      const dx = target.x - seg.x;
-      const dy = target.y - seg.y;
+      const dx = target.x - origin.x;
+      const dy = target.y - origin.y;
       const mag = Math.hypot(dx, dy) || 1;
       const range = weaponRange(w);
       if (mag > range) continue;
@@ -411,8 +445,8 @@ export class SnakePlayer {
       if (w.type === "single_shot") {
         this.fire({
           kind: "bullet",
-          x: seg.x + ux * 16,
-          y: seg.y + uy * 16,
+          x: origin.x + ux * 16,
+          y: origin.y + uy * 16,
           vx: ux * SHOT_SPEED,
           vy: uy * SHOT_SPEED,
           damage: dmg,
@@ -420,14 +454,14 @@ export class SnakePlayer {
           radius: 4,
         });
       } else if (w.type === "cone_burst") {
-        const pellets = 3 + (w.segmentIndex % 3);
+        const pellets = 3 + Math.max(0, w.segmentIndex) % 3;
         const mid = (pellets - 1) / 2;
         for (let i = 0; i < pellets; i++) {
           const a = angle + (i - mid) * CONE_SPREAD;
           this.fire({
             kind: "bullet",
-            x: seg.x + Math.cos(a) * 14,
-            y: seg.y + Math.sin(a) * 14,
+            x: origin.x + Math.cos(a) * 14,
+            y: origin.y + Math.sin(a) * 14,
             vx: Math.cos(a) * CONE_SPEED,
             vy: Math.sin(a) * CONE_SPEED,
             damage: dmg,
@@ -436,11 +470,11 @@ export class SnakePlayer {
           });
         }
       } else {
-        this.playSlash(seg.x, seg.y, angle, range, SLASH_ARC);
+        this.playSlash(origin.x, origin.y, angle, range, SLASH_ARC);
         this.fire({
           kind: "slash",
-          x: seg.x,
-          y: seg.y,
+          x: origin.x,
+          y: origin.y,
           vx: 0,
           vy: 0,
           damage: dmg,
@@ -491,10 +525,6 @@ export class SnakePlayer {
       const ahead = hist[aheadIdx]!;
       const ang = Math.atan2(ahead.y - pos.y, ahead.x - pos.x);
       if (Number.isFinite(ang)) seg.setRotation(ang);
-      const state = this.body[i];
-      if (state) {
-        state.healthBar.setPosition(pos.x, pos.y);
-      }
     }
   }
 

@@ -1,10 +1,17 @@
 export const WORLD_SIZE = 4800;
 export const TILE = 96;
 
+export const GAME_WIDTH = 1280;
+export const GAME_HEIGHT = 720;
+export const DESKTOP_ZOOM = 1;
+/** Mobile zoom-out: ~2/3 of desktop zoom so more of the arena is visible. */
+export const MOBILE_ZOOM = 2 / 3;
+export const MOBILE_WIDTH = 820;
+
 export const HEAD_RADIUS = 16;
 export const SEGMENT_RADIUS = 13;
 export const HISTORY_STRIDE = 7;
-export const DEFAULT_SEGMENT_COUNT = 6;
+export const DEFAULT_SEGMENT_COUNT = 0;
 export const BASE_SPEED = 240;
 
 export const DUMMY_HP = 100;
@@ -21,6 +28,7 @@ export const SPAWN_INTERVAL_MIN_MS = 280;
 export const PLAYER_IFRAME_MS = 450;
 
 export const WAVE_DURATION_MS = 30_000;
+export const BOSS_WAVE = 10;
 
 export const GEM_POOL = 80;
 export const GEM_RADIUS = 6;
@@ -62,6 +70,10 @@ export const COLOR = {
   enemy: 0x6b2d86,
   enemyCore: 0xe0aaff,
   enemyHurt: 0xff77aa,
+  swarmer: 0xc084fc,
+  grunt: 0x6b2d86,
+  brute: 0x9a3412,
+  boss: 0xe11d48,
   blaster: 0xf4ebe3,
   turret: 0xc5d0d8,
   blade: 0xd47872,

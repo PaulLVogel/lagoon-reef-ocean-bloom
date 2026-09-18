@@ -1,14 +1,16 @@
 import * as Phaser from "phaser";
 import {
+  BOSS_WAVE,
   COLOR,
   COMBO_TRIGGER,
   COMBO_WINDOW_MS,
-  ENEMY_CONTACT_DAMAGE,
-  ENEMY_HP,
+  DESKTOP_ZOOM,
   ENEMY_RADIUS,
   GOLD_TALLY_MS,
   HUD_TICK_MS,
   MAX_ENEMIES,
+  MOBILE_WIDTH,
+  MOBILE_ZOOM,
   PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS,
   SEGMENT_RADIUS,
@@ -18,7 +20,7 @@ import {
   WAVE_DURATION_MS,
   WORLD_SIZE,
 } from "./constants";
-import { Enemy } from "./Enemy";
+import { ENEMY_BASE, Enemy, type EnemyKind, type EnemySpec } from "./Enemy";
 import { Gems } from "./Gems";
 import { installControlsTest } from "./controlsTest";
 import { isGameStarted, installKeyboard, sampleMove } from "./input";
@@ -27,20 +29,29 @@ import { patchHud, runtime } from "./runtime";
 import {
   bankInterest,
   canAffordAny,
-  offersFromKinds,
   rollShopOffers,
   SHOP_PITY_GOLD,
   SHOP_PITY_HP,
   type ShopKind,
+  type ShopOffer,
 } from "./shop";
 import { SnakePlayer } from "./SnakePlayer";
-import { type FireEvent } from "./Weapon";
+import { randomWeaponType, type FireEvent, type WeaponType } from "./Weapon";
+
+type HostileShot = {
+  gfx: Phaser.GameObjects.Arc;
+  vx: number;
+  vy: number;
+  damage: number;
+  live: boolean;
+};
 
 export class MainScene extends Phaser.Scene {
   private player!: SnakePlayer;
   private shots!: Projectiles;
   private gems!: Gems;
   private enemies: Enemy[] = [];
+  private hostiles: HostileShot[] = [];
   private spawnAcc = 0;
   private playerHp = 100;
   private iFrameUntil = 0;
@@ -59,6 +70,7 @@ export class MainScene extends Phaser.Scene {
   private unbindKeys: (() => void) | null = null;
   private floor!: Phaser.GameObjects.TileSprite;
   private audioCtx: AudioContext | null = null;
+  private bossSpawned = false;
 
   constructor() {
     super("main");
@@ -81,6 +93,7 @@ export class MainScene extends Phaser.Scene {
     this.enemies = [];
     this.gemTimes = [];
     this.feverUntil = 0;
+    this.bossSpawned = false;
   }
 
   create() {
@@ -130,12 +143,14 @@ export class MainScene extends Phaser.Scene {
       if (this.waveClear && !this.dead) {
         if (bucket.pendingUpgrade) {
           const kind = bucket.pendingUpgrade;
+          const wtype = bucket.pendingWeaponType;
           bucket.pendingUpgrade = null;
+          bucket.pendingWeaponType = null;
           const from = bucket.goldTallyFrom ?? this.gold;
           this.gold = bucket.snap.gold;
           bucket.goldTallyFrom = null;
           this.tallyGoldDisplay(from, this.gold);
-          this.applyUpgrade(kind);
+          this.applyUpgrade(kind, wtype);
         }
         if (bucket.rerollRequested) {
           bucket.rerollRequested = false;
@@ -167,18 +182,18 @@ export class MainScene extends Phaser.Scene {
       if (this.waveMs <= 0) {
         this.endWave();
       } else {
-        this.spawnAcc += delta;
-        const interval = this.spawnInterval();
-        if (this.spawnAcc >= interval && this.livingCount() < MAX_ENEMIES) {
-          this.spawnAcc = 0;
-          this.spawnEnemyOutsideView();
-        }
+        this.tickSpawns(delta, time);
         for (const e of this.enemies) {
           if (!e.alive) continue;
           const t = this.player.nearestChasePoint(e.x, e.y);
-          e.chase(t.x, t.y, dt);
+          e.chase(t.x, t.y, dt, time);
+          if (e.kind === "boss") {
+            const volley = e.tickBoss(time, this.player.x, this.player.y);
+            for (const s of volley) this.spawnHostile(s.x, s.y, s.vx, s.vy, s.damage);
+          }
         }
         this.shots.update(dt, (x, y, dmg, r) => this.hitEnemiesAt(x, y, dmg, r));
+        this.tickHostiles(dt, time);
         this.checkPlayerContact(time);
         this.collectLoot(dt, time);
         this.pruneDead();
@@ -212,9 +227,57 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  private tickSpawns(delta: number, _time: number) {
+    if (this.wave === BOSS_WAVE) {
+      if (!this.bossSpawned) {
+        this.spawnBoss();
+        this.bossSpawned = true;
+      }
+      return;
+    }
+    this.spawnAcc += delta;
+    const interval = this.spawnInterval();
+    const cap = Math.min(50, MAX_ENEMIES + (this.wave - 1) * 2);
+    if (this.spawnAcc >= interval && this.livingCount() < cap) {
+      this.spawnAcc = 0;
+      this.spawnEnemyOutsideView();
+    }
+  }
+
   private spawnInterval() {
     const t = 1 - this.waveMs / WAVE_DURATION_MS;
-    return Phaser.Math.Linear(SPAWN_INTERVAL_MS, SPAWN_INTERVAL_MIN_MS, t);
+    const base = Phaser.Math.Linear(SPAWN_INTERVAL_MS, SPAWN_INTERVAL_MIN_MS, t);
+    const waveMul = 1 + (this.wave - 1) * 0.09;
+    return Math.max(140, base / waveMul);
+  }
+
+  private waveHpMul() {
+    return 1 + (this.wave - 1) * 0.18;
+  }
+
+  private waveDmgMul() {
+    return 1 + (this.wave - 1) * 0.1;
+  }
+
+  private rollTier(): Exclude<EnemyKind, "boss"> {
+    const w = this.wave;
+    const brute = Math.min(0.28, 0.04 + w * 0.02);
+    const grunt = Math.min(0.5, 0.22 + w * 0.03);
+    const n = Math.random();
+    if (n < brute) return "brute";
+    if (n < brute + grunt) return "grunt";
+    return "swarmer";
+  }
+
+  private specFor(kind: Exclude<EnemyKind, "boss">): EnemySpec {
+    const base = ENEMY_BASE[kind];
+    const hpTable = { swarmer: 10, grunt: 24, brute: 70 };
+    return {
+      ...base,
+      hp: Math.round(hpTable[kind] * this.waveHpMul() + Phaser.Math.Between(0, 6)),
+      speed: base.speed,
+      contact: Math.round(base.contact * this.waveDmgMul()),
+    };
   }
 
   private endWave() {
@@ -224,6 +287,7 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
+    this.clearHostiles();
     const vacuumed = this.gems.vacuum();
     if (vacuumed > 0) {
       this.gold += vacuumed;
@@ -232,9 +296,11 @@ export class MainScene extends Phaser.Scene {
     this.goldDisplay = this.gold;
     this.gemTimes = [];
     this.feverUntil = 0;
+    this.bossSpawned = false;
     const bucket = runtime();
     bucket.shopPicked = null;
     bucket.pendingUpgrade = null;
+    bucket.pendingWeaponType = null;
     bucket.nextWaveRequested = false;
     bucket.rerollRequested = false;
     this.rollShop();
@@ -256,30 +322,47 @@ export class MainScene extends Phaser.Scene {
       combo: 0,
       lastInterest: 0,
       shopFrozen: bucket.shopFrozen,
+      slotLocked: [...bucket.slotLocked],
     });
+  }
+
+  private heldOffers(): (ShopOffer | null)[] {
+    const bucket = runtime();
+    const held: (ShopOffer | null)[] = [null, null, null];
+    for (let i = 0; i < 3; i++) {
+      if (bucket.slotLocked[i] && bucket.shopOffers[i]) held[i] = bucket.shopOffers[i]!;
+    }
+    return held;
   }
 
   private rollShop() {
     const bucket = runtime();
-    const offers =
-      bucket.shopFrozen && bucket.frozenKinds.length
-        ? offersFromKinds(bucket.frozenKinds, this.wave, bucket.purchaseHistory)
-        : rollShopOffers(
-            this.wave,
-            this.player.segments.length,
-            { segmentVacuum: this.player.segmentVacuum },
-            bucket.purchaseHistory,
-          );
-    if (!bucket.shopFrozen) bucket.frozenKinds = [];
+    const offers = rollShopOffers(
+      this.wave,
+      this.player.segments.length,
+      {
+        segmentVacuum: this.player.segmentVacuum,
+        canMerge: (t) => this.player.canMerge(t),
+        mergeToTier: (t) => this.player.mergePreviewTier(t),
+        segmentCount: this.player.segments.length,
+      },
+      bucket.purchaseHistory,
+      this.heldOffers(),
+    );
     bucket.shopOffers = offers;
     bucket.shopPicked = null;
     bucket.pendingUpgrade = null;
+    bucket.frozenKinds = bucket.slotLocked.map((locked, i) =>
+      locked && offers[i] ? offers[i]!.kind : null,
+    );
+    bucket.shopFrozen = bucket.slotLocked.some(Boolean);
     patchHud({
       shopOffers: offers,
       shopPicked: null,
       gold: this.gold,
       segments: this.player.segments.length,
       shopFrozen: bucket.shopFrozen,
+      slotLocked: [...bucket.slotLocked],
     });
   }
 
@@ -291,6 +374,7 @@ export class MainScene extends Phaser.Scene {
     this.waveMs = WAVE_DURATION_MS;
     this.waveClear = false;
     this.spawnAcc = 0;
+    this.bossSpawned = false;
     this.gold = bucket.snap.gold;
     if (this.nextWaveBank > 0) {
       this.gold += this.nextWaveBank;
@@ -309,7 +393,6 @@ export class MainScene extends Phaser.Scene {
       pityHp = nextHp - this.playerHp;
       this.playerHp = nextHp;
     }
-    if (!bucket.shopFrozen) bucket.frozenKinds = [];
     this.gemTimes = [];
     this.feverUntil = 0;
     bucket.shopOffers = [];
@@ -336,17 +419,18 @@ export class MainScene extends Phaser.Scene {
       combo: 0,
       lastInterest: interest,
       shopFrozen: bucket.shopFrozen,
+      slotLocked: [...bucket.slotLocked],
       lastPityHp: pityHp,
       lastPityGold: pityGold,
     });
   }
 
-  private applyUpgrade(kind: ShopKind) {
+  private applyUpgrade(kind: ShopKind, weaponType: WeaponType | null) {
     if (kind === "add_blaster") {
-      this.player.addArmedSegment("single_shot");
+      this.player.grantWeapon(weaponType ?? randomWeaponType());
     } else if (kind === "add_2_blasters") {
-      this.player.addArmedSegment("single_shot");
-      this.player.addArmedSegment("single_shot");
+      this.player.grantWeapon(randomWeaponType());
+      this.player.grantWeapon(randomWeaponType());
     } else if (kind === "turret_rate") {
       this.player.buffWeaponType("cone_burst", "fireRate", 1.25);
     } else if (kind === "snake_speed") {
@@ -362,8 +446,8 @@ export class MainScene extends Phaser.Scene {
     } else if (kind === "segment_vacuum") {
       this.player.enableSegmentVacuum();
     } else if (kind === "credit_card") {
-      this.player.addArmedSegment("single_shot");
-      this.player.addArmedSegment("single_shot");
+      this.player.grantWeapon(randomWeaponType());
+      this.player.grantWeapon(randomWeaponType());
       this.player.boostSpeed(1.18);
     }
     patchHud({
@@ -399,7 +483,7 @@ export class MainScene extends Phaser.Scene {
     return this.enemies.filter((e) => e.alive).length;
   }
 
-  private spawnEnemyOutsideView() {
+  private spawnEnemyOutsideView(spec?: EnemySpec) {
     const cam = this.cameras.main;
     const view = cam.worldView;
     const pad = 56;
@@ -425,11 +509,53 @@ export class MainScene extends Phaser.Scene {
       y = Phaser.Math.Clamp(y, ENEMY_RADIUS + 8, WORLD_SIZE - ENEMY_RADIUS - 8);
       tries += 1;
     } while (view.contains(x, y) && tries < 8);
-    this.enemies.push(new Enemy(this, x, y, this.rollEnemyHp()));
+    this.enemies.push(new Enemy(this, x, y, spec ?? this.specFor(this.rollTier())));
   }
 
-  private rollEnemyHp() {
-    return ENEMY_HP + (this.wave - 1) * 6 + Phaser.Math.Between(0, 10);
+  private spawnBoss() {
+    const spec: EnemySpec = {
+      kind: "boss",
+      radius: 52,
+      hp: Math.round(820 * this.waveHpMul()),
+      speed: 48,
+      contact: Math.round(22 * this.waveDmgMul()),
+      color: COLOR.boss,
+    };
+    this.spawnEnemyOutsideView(spec);
+  }
+
+  private spawnHostile(x: number, y: number, vx: number, vy: number, damage: number) {
+    const gfx = this.add.circle(x, y, 6, 0xf43f5e, 1);
+    gfx.setDepth(15);
+    this.hostiles.push({ gfx, vx, vy, damage, live: true });
+  }
+
+  private tickHostiles(dt: number, now: number) {
+    for (const s of this.hostiles) {
+      if (!s.live) continue;
+      s.gfx.x += s.vx * dt;
+      s.gfx.y += s.vy * dt;
+      if (s.gfx.x < 0 || s.gfx.y < 0 || s.gfx.x > WORLD_SIZE || s.gfx.y > WORLD_SIZE) {
+        s.live = false;
+        s.gfx.destroy();
+        continue;
+      }
+      if (now >= this.iFrameUntil && this.player.head) {
+        const dx = s.gfx.x - this.player.x;
+        const dy = s.gfx.y - this.player.y;
+        if (dx * dx + dy * dy <= (14) * (14)) {
+          this.hurtPlayer(s.damage, now);
+          s.live = false;
+          s.gfx.destroy();
+        }
+      }
+    }
+    this.hostiles = this.hostiles.filter((s) => s.live);
+  }
+
+  private clearHostiles() {
+    for (const s of this.hostiles) s.gfx.destroy();
+    this.hostiles = [];
   }
 
   private hitEnemiesAt(x: number, y: number, dmg: number, r: number) {
@@ -446,11 +572,20 @@ export class MainScene extends Phaser.Scene {
     const x = e.x;
     const y = e.y;
     const hpBand = e.maxHp;
+    const wasBoss = e.kind === "boss";
     e.hit(dmg);
     this.floatDmg(x, y, dmg);
     if (!e.alive) {
       this.kills += 1;
-      this.gems.spawnFromKill(x, y, hpBand);
+      if (wasBoss) {
+        for (let i = 0; i < 18; i++) {
+          const jx = x + Phaser.Math.Between(-40, 40);
+          const jy = y + Phaser.Math.Between(-40, 40);
+          this.gems.spawnFromKill(jx, jy, 80);
+        }
+      } else {
+        this.gems.spawnFromKill(x, y, hpBand);
+      }
     }
   }
 
@@ -460,12 +595,12 @@ export class MainScene extends Phaser.Scene {
       const hitHead =
         now >= this.iFrameUntil &&
         e.overlaps(this.player.x, this.player.y, this.player.getRadius());
-      if (hitHead) this.hurtPlayer(ENEMY_CONTACT_DAMAGE, now);
+      if (hitHead) this.hurtPlayer(e.contact, now);
       for (let i = 0; i < this.player.body.length; i++) {
         const s = this.player.body[i]!;
         if (!e.overlaps(s.sprite.x, s.sprite.y, SEGMENT_RADIUS)) continue;
         if (!s.isActive || s.hp <= 0) continue;
-        this.player.damageSegment(i, ENEMY_CONTACT_DAMAGE, now);
+        this.player.damageSegment(i, e.contact, now);
       }
     }
   }
@@ -484,6 +619,7 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
+    this.clearHostiles();
     this.gems.clear();
     patchHud({
       hp: 0,
@@ -652,14 +788,18 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private fitZoom() {
-    const cam = this.cameras.main;
-    const short = Math.min(cam.width, cam.height);
-    cam.setZoom(short < 520 ? 0.78 : short < 900 ? 0.92 : 1);
+  private isMobileView() {
+    const w = this.scale.gameSize.width;
+    const h = this.scale.gameSize.height;
+    return w < MOBILE_WIDTH || (h > w && w < 1100);
   }
 
-  private onResize(gameSize: Phaser.Structs.Size) {
-    this.cameras.main.setSize(gameSize.width, gameSize.height);
+  private fitZoom() {
+    const cam = this.cameras.main;
+    cam.setZoom(this.isMobileView() ? MOBILE_ZOOM : DESKTOP_ZOOM);
+  }
+
+  private onResize(_gameSize: Phaser.Structs.Size) {
     this.fitZoom();
   }
 
@@ -669,6 +809,7 @@ export class MainScene extends Phaser.Scene {
     this.unbindKeys = null;
     this.shots?.destroy();
     this.gems?.destroy();
+    this.clearHostiles();
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.player?.destroy();

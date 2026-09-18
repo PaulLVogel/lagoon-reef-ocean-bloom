@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **modular weapons + item modifiers** on `main` (orbiting blade removed; exactly one weapon per segment: SINGLE_SHOT / CONE_BURST / MELEE_SLASH; range-gated targeting; `applyItemModifier`).
+Last shipped: **mobile FIT+zoom, 1:1 weapons + hidden HP bars, enemy tiers, wave-10 boss, per-slot shop lock, Brotato weapon merge T1–T3**.
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 

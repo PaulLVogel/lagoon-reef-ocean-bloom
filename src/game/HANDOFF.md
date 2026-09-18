@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **modular weapons + item modifiers** on `main` (orbiting blade removed; exactly one weapon per segment: SINGLE_SHOT / CONE_BURST / MELEE_SLASH; range-gated targeting; `applyItemModifier`).
+Last shipped: **mobile FIT+zoom, 1:1 weapons + hidden HP bars, enemy tiers, wave-10 boss, per-slot shop lock, Brotato weapon merge T1–T3**.
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.

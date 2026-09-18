@@ -1,4 +1,4 @@
-import { Circle, Crosshair, Gauge, Heart, Lock, Magnet, Play, Plus, Zap } from "lucide-react";
+import { Circle, CreditCard, Crosshair, Gauge, Heart, Lock, Magnet, Play, Plus, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isGameStarted, setGameStarted } from "@/game/input";
 import {
@@ -7,10 +7,11 @@ import {
   requestNextWave,
   requestReroll,
   requestRestart,
-  requestToggleFreeze,
+  requestToggleSlotLock,
   subscribeHud,
 } from "@/game/runtime";
 import {
+  allowsOverdraft,
   canAffordAny,
   SHOP_INTEREST_RATE,
   SHOP_PITY_GOLD,
@@ -37,6 +38,7 @@ function shopIcon(kind: ShopKind) {
   if (kind === "heal") return Heart;
   if (kind === "pickup_radius") return Circle;
   if (kind === "segment_vacuum") return Magnet;
+  if (kind === "credit_card") return CreditCard;
   return Crosshair;
 }
 
@@ -54,10 +56,12 @@ export function GameOverlay() {
   const offers = hud.shopOffers ?? [];
   const picked = hud.shopPicked;
   const gold = hud.gold ?? 0;
-  const shopFrozen = Boolean(hud.shopFrozen);
+  const goldShown = Math.round(hud.goldDisplay ?? gold);
+  const slotLocked = hud.slotLocked ?? [false, false, false];
+  const allLocked = offers.length > 0 && slotLocked.slice(0, offers.length).every(Boolean);
   const pricedOut = !picked && offers.length > 0 && !canAffordAny(gold, offers);
-  const canReroll = !picked && !shopFrozen && gold >= SHOP_REROLL_COST;
-  const interestPreview = Math.floor(gold * SHOP_INTEREST_RATE);
+  const canReroll = !picked && !allLocked && gold >= SHOP_REROLL_COST;
+  const interestPreview = Math.floor(Math.max(0, gold) * SHOP_INTEREST_RATE);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
@@ -86,7 +90,7 @@ export function GameOverlay() {
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Stat label="HP" value={`${hud.hp}/${hud.maxHp}`} />
-          <Stat label="Gold" value={String(gold)} />
+          <Stat label="Gold" value={String(goldShown)} danger={goldShown < 0} />
           <Stat label="Kills" value={String(hud.kills ?? 0)} />
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
           {hud.fever ? <Stat label="Fever" value={`x2 · ${hud.combo ?? 0}`} /> : null}
@@ -127,7 +131,7 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>
-                Buy one upgrade, leftover gold carries
+                Buy one, lock cards, leftover gold carries
               </li>
             </ul>
             <button
@@ -156,9 +160,22 @@ export function GameOverlay() {
               The swarm got you
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              {hud.kills} kill{hud.kills === 1 ? "" : "s"} · {gold} gold on wave{" "}
+              {hud.kills} kill{hud.kills === 1 ? "" : "s"} · {goldShown} gold on hand · wave{" "}
               {hud.wave ?? 1}.
             </p>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <Stat label="Lifetime earned" value={String(hud.totalGoldEarned ?? 0)} />
+              <Stat
+                label="Efficiency"
+                value={
+                  (hud.kills ?? 0) > 0
+                    ? `${((hud.totalGoldEarned ?? 0) / Math.max(1, hud.kills)).toFixed(1)} g/kill`
+                    : "—"
+                }
+              />
+              <Stat label="Banked next" value={String(hud.nextWaveBank ?? 0)} />
+              <Stat label="On hand" value={String(goldShown)} danger={goldShown < 0} />
+            </div>
             <button
               type="button"
               onClick={() => requestRestart()}
@@ -185,14 +202,15 @@ export function GameOverlay() {
               Shop
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Buy one, freeze these three for next shop, or skip to bank{" "}
-              {Math.round(SHOP_INTEREST_RATE * 100)}% interest. Repeat buys cost
-              ×1.5.
+              Buy one. Lock individual cards so they survive reroll and the next
+              shop. Duplicate weapons merge up to Tier 3.
             </p>
             <p className="mt-1 font-mono text-sm tabular-nums text-fg">
-              {gold} gold · {hud.kills} kill{hud.kills === 1 ? "" : "s"}
+              <span className={goldShown < 0 ? "text-red-400" : undefined}>
+                {goldShown} gold
+              </span>{" "}
+              · {hud.kills} kill{hud.kills === 1 ? "" : "s"}
               {interestPreview > 0 ? ` · bank +${interestPreview}` : ""}
-              {shopFrozen ? " · offers frozen" : ""}
             </p>
             {pricedOut ? (
               <p className="mt-2 text-sm text-emerald-300">
@@ -207,16 +225,17 @@ export function GameOverlay() {
               </p>
             ) : null}
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {offers.map((offer) => (
+              {offers.map((offer, index) => (
                 <ShopCard
                   key={offer.id}
                   offer={offer}
                   gold={gold}
                   selected={picked === offer.id}
-                  locked={Boolean(picked) && picked !== offer.id}
+                  boughtOther={Boolean(picked) && picked !== offer.id}
                   grayed={pricedOut}
-                  frozen={shopFrozen}
+                  slotLocked={Boolean(slotLocked[index])}
                   onPick={() => pickShopOffer(offer.id)}
+                  onLock={() => requestToggleSlotLock(index)}
                 />
               ))}
             </div>
@@ -233,24 +252,7 @@ export function GameOverlay() {
                     : "cursor-not-allowed border border-border bg-surface text-muted",
                 )}
               >
-                Reroll options · {SHOP_REROLL_COST}g
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(picked)}
-                onClick={() => requestToggleFreeze()}
-                className={cn(
-                  "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl",
-                  "text-sm font-medium transition-transform duration-(--motion-quick)",
-                  picked
-                    ? "cursor-not-allowed border border-border bg-surface text-muted"
-                    : shopFrozen
-                      ? "border border-amber-300/50 bg-amber-300/15 text-fg hover:border-amber-200/60 active:scale-[0.98]"
-                      : "border border-border bg-surface text-fg hover:border-fg/30 active:scale-[0.98]",
-                )}
-              >
-                <Lock className="size-4" strokeWidth={2} />
-                {shopFrozen ? "Unfreeze offers" : "Freeze offers"}
+                Reroll unlocked · {SHOP_REROLL_COST}g
               </button>
               <button
                 type="button"
@@ -267,9 +269,7 @@ export function GameOverlay() {
                   ? "Next wave"
                   : pricedOut
                     ? "Skip · pity + next"
-                    : shopFrozen
-                      ? "Hold & next wave"
-                      : "Bank & next wave"}
+                    : "Bank & next wave"}
               </button>
             </div>
           </div>
@@ -283,30 +283,29 @@ function ShopCard({
   offer,
   gold,
   selected,
-  locked,
+  boughtOther,
   grayed,
-  frozen,
+  slotLocked,
   onPick,
+  onLock,
 }: {
   offer: ShopOffer;
   gold: number;
   selected: boolean;
-  locked: boolean;
+  boughtOther: boolean;
   grayed: boolean;
-  frozen: boolean;
+  slotLocked: boolean;
   onPick: () => void;
+  onLock: () => void;
 }) {
   const Icon = shopIcon(offer.kind);
-  const unaffordable = gold < offer.cost && !selected;
+  const unaffordable = !allowsOverdraft(offer.kind) && gold < offer.cost && !selected;
   const rarity: ShopRarity = offer.rarity ?? "common";
   const legendary = rarity === "legendary" && !selected && !grayed;
   return (
-    <button
-      type="button"
-      disabled={locked || unaffordable}
-      onClick={onPick}
+    <div
       className={cn(
-        "flex min-h-[9.5rem] flex-col rounded-2xl border p-4 text-left transition-transform duration-(--motion-quick)",
+        "relative flex min-h-[9.5rem] flex-col rounded-2xl border p-4 text-left",
         selected
           ? "border-blood bg-blood/15"
           : grayed
@@ -314,43 +313,76 @@ function ShopCard({
             : legendary
               ? "shop-legend bg-surface"
               : rarity === "rare"
-                ? "border-sky-400/40 bg-surface hover:border-sky-300/50"
-                : "border-border bg-surface hover:border-fg/30",
-        locked || unaffordable || grayed
-          ? "cursor-not-allowed opacity-40"
-          : "active:scale-[0.99]",
-        frozen && !grayed ? "ring-1 ring-amber-300/40" : null,
+                ? "border-sky-400/40 bg-surface"
+                : "border-border bg-surface",
+        boughtOther || unaffordable || grayed ? "opacity-40" : null,
+        slotLocked && !grayed ? "ring-1 ring-amber-300/50" : null,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Icon className={cn("size-5", selected ? "text-blood" : "text-fg")} strokeWidth={1.75} />
-        <div className="flex flex-col items-end gap-1">
-          <span
-            className={cn(
-              "text-[10px] tracking-[0.14em] uppercase",
-              rarity === "legendary"
-                ? "text-amber-300"
-                : rarity === "rare"
-                  ? "text-sky-300"
-                  : "text-muted",
-            )}
-          >
-            {rarity}
-          </span>
-          <span className="font-mono text-xs tabular-nums text-muted">{offer.cost}g</span>
+      <button
+        type="button"
+        disabled={boughtOther}
+        onClick={onLock}
+        className={cn(
+          "absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-lg border",
+          slotLocked
+            ? "border-amber-300/60 bg-amber-300/20 text-amber-200"
+            : "border-border bg-surface text-muted hover:text-fg",
+          boughtOther ? "cursor-not-allowed" : null,
+        )}
+        aria-label={slotLocked ? "Unlock offer" : "Lock offer"}
+      >
+        <Lock className="size-3.5" strokeWidth={2} />
+      </button>
+      <button
+        type="button"
+        disabled={boughtOther || unaffordable}
+        onClick={onPick}
+        className={cn(
+          "flex flex-1 flex-col text-left",
+          boughtOther || unaffordable ? "cursor-not-allowed" : "active:scale-[0.99]",
+        )}
+      >
+        <div className="flex items-start justify-between gap-2 pr-10">
+          <Icon className={cn("size-5", selected ? "text-blood" : "text-fg")} strokeWidth={1.75} />
+          <div className="flex flex-col items-end gap-1">
+            <span
+              className={cn(
+                "text-[10px] tracking-[0.14em] uppercase",
+                rarity === "legendary"
+                  ? "text-amber-300"
+                  : rarity === "rare"
+                    ? "text-sky-300"
+                    : "text-muted",
+              )}
+            >
+              {offer.merge ? `merge T${offer.mergeToTier ?? 2}` : rarity}
+            </span>
+            <span className="font-mono text-xs tabular-nums text-muted">{offer.cost}g</span>
+          </div>
         </div>
-      </div>
-      <p className="font-display mt-3 text-lg leading-tight text-fg">{offer.title}</p>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{offer.blurb}</p>
-    </button>
+        <p className="font-display mt-3 text-lg leading-tight text-fg">{offer.title}</p>
+        <p className="mt-1 text-sm leading-relaxed text-muted">{offer.blurb}</p>
+      </button>
+    </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  danger,
+}: {
+  label: string;
+  value: string;
+  danger?: boolean;
+}) {
   return (
     <div className="min-w-[4.5rem] rounded-xl border border-border bg-surface/80 px-3 py-2 text-right backdrop-blur-sm">
       <p className="text-[10px] tracking-[0.14em] text-muted uppercase">{label}</p>
-      <p className="font-mono text-sm tabular-nums text-fg">{value}</p>
+      <p className={cn("font-mono text-sm tabular-nums", danger ? "text-red-400" : "text-fg")}>
+        {value}
+      </p>
     </div>
   );
 }
