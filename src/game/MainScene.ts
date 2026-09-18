@@ -22,7 +22,7 @@ import { installControlsTest } from "./controlsTest";
 import { isGameStarted, installKeyboard, sampleMove } from "./input";
 import { Projectiles } from "./Projectiles";
 import { patchHud, runtime } from "./runtime";
-import { rollShopOffers, type ShopKind } from "./shop";
+import { bankInterest, rollShopOffers, type ShopKind } from "./shop";
 import { SnakePlayer } from "./SnakePlayer";
 
 export class MainScene extends Phaser.Scene {
@@ -114,6 +114,11 @@ export class MainScene extends Phaser.Scene {
           this.gold = bucket.snap.gold;
           this.applyUpgrade(kind);
         }
+        if (bucket.rerollRequested) {
+          bucket.rerollRequested = false;
+          this.gold = bucket.snap.gold;
+          this.rollShop();
+        }
         if (bucket.nextWaveRequested) {
           bucket.nextWaveRequested = false;
           this.startNextWave();
@@ -190,21 +195,18 @@ export class MainScene extends Phaser.Scene {
     this.gold += this.gems.vacuum();
     this.gemTimes = [];
     this.feverUntil = 0;
-    const offers = rollShopOffers(this.wave, this.player.segments.length, {
-      segmentVacuum: this.player.segmentVacuum,
-    });
     const bucket = runtime();
-    bucket.shopOffers = offers;
     bucket.shopPicked = null;
     bucket.pendingUpgrade = null;
     bucket.nextWaveRequested = false;
+    bucket.rerollRequested = false;
+    this.rollShop();
     patchHud({
       waveMs: 0,
       swarm: 0,
       waveClear: true,
       playing: true,
       wave: this.wave,
-      shopOffers: offers,
       shopPicked: null,
       segments: this.player.segments.length,
       hp: this.playerHp,
@@ -212,6 +214,26 @@ export class MainScene extends Phaser.Scene {
       gold: this.gold,
       fever: false,
       combo: 0,
+      lastInterest: 0,
+    });
+  }
+
+  private rollShop() {
+    const bucket = runtime();
+    const offers = rollShopOffers(
+      this.wave,
+      this.player.segments.length,
+      { segmentVacuum: this.player.segmentVacuum },
+      bucket.purchaseHistory,
+    );
+    bucket.shopOffers = offers;
+    bucket.shopPicked = null;
+    bucket.pendingUpgrade = null;
+    patchHud({
+      shopOffers: offers,
+      shopPicked: null,
+      gold: this.gold,
+      segments: this.player.segments.length,
     });
   }
 
@@ -221,12 +243,15 @@ export class MainScene extends Phaser.Scene {
     this.waveClear = false;
     this.spawnAcc = 0;
     this.gold = runtime().snap.gold;
+    const interest = bankInterest(this.gold);
+    this.gold += interest;
     this.gemTimes = [];
     this.feverUntil = 0;
     const bucket = runtime();
     bucket.shopOffers = [];
     bucket.shopPicked = null;
     bucket.pendingUpgrade = null;
+    bucket.rerollRequested = false;
     patchHud({
       waveClear: false,
       waveMs: WAVE_DURATION_MS,
@@ -242,11 +267,15 @@ export class MainScene extends Phaser.Scene {
       speed: Math.round(this.player.speed),
       fever: false,
       combo: 0,
+      lastInterest: interest,
     });
   }
 
   private applyUpgrade(kind: ShopKind) {
     if (kind === "add_blaster") {
+      this.player.addArmedSegment("blaster");
+    } else if (kind === "add_2_blasters") {
+      this.player.addArmedSegment("blaster");
       this.player.addArmedSegment("blaster");
     } else if (kind === "turret_rate") {
       this.player.boostFireRate("turret", 0.8);
