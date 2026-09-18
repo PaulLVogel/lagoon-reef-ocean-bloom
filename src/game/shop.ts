@@ -1,5 +1,6 @@
 export type ShopKind =
   | "add_blaster"
+  | "add_2_blasters"
   | "turret_rate"
   | "snake_speed"
   | "blaster_rate"
@@ -8,91 +9,147 @@ export type ShopKind =
   | "pickup_radius"
   | "segment_vacuum";
 
+export type ShopRarity = "common" | "rare" | "legendary";
+
 export type ShopOffer = {
   id: string;
   kind: ShopKind;
   title: string;
   blurb: string;
   cost: number;
+  rarity: ShopRarity;
 };
 
-const CATALOG: Omit<ShopOffer, "id">[] = [
+type CatalogItem = Omit<ShopOffer, "id">;
+
+const CATALOG: CatalogItem[] = [
   {
-    kind: "add_blaster",
-    title: "New blaster segment",
-    blurb: "Grow the tail. Extra barrel fires along facing.",
-    cost: 36,
+    kind: "heal",
+    title: "Mend scales",
+    blurb: "Restore 30 HP, capped at max.",
+    cost: 12,
+    rarity: "common",
   },
   {
     kind: "turret_rate",
-    title: "Turret cadence",
+    title: "Turret Rate +1",
     blurb: "Aiming mounts cycle 20% faster.",
     cost: 20,
-  },
-  {
-    kind: "snake_speed",
-    title: "Coil speed",
-    blurb: "Head moves 18% faster. Trail keeps the same stride.",
-    cost: 28,
+    rarity: "common",
   },
   {
     kind: "blaster_rate",
     title: "Blaster cadence",
     blurb: "Forward guns cycle 20% faster.",
     cost: 20,
-  },
-  {
-    kind: "turret_dmg",
-    title: "Turret cores",
-    blurb: "Seeking shots deal +3 damage.",
-    cost: 24,
-  },
-  {
-    kind: "heal",
-    title: "Mend scales",
-    blurb: "Restore 30 HP, capped at max.",
-    cost: 12,
+    rarity: "common",
   },
   {
     kind: "pickup_radius",
     title: "Wide maw",
     blurb: "Head pickup circle grows. Gems vacuum from farther out.",
     cost: 22,
+    rarity: "common",
+  },
+  {
+    kind: "turret_dmg",
+    title: "Turret cores",
+    blurb: "Seeking shots deal +3 damage.",
+    cost: 24,
+    rarity: "rare",
+  },
+  {
+    kind: "snake_speed",
+    title: "Coil speed",
+    blurb: "Head moves 18% faster. Trail keeps the same stride.",
+    cost: 28,
+    rarity: "rare",
+  },
+  {
+    kind: "add_blaster",
+    title: "New blaster segment",
+    blurb: "Grow the tail. Extra barrel fires along facing.",
+    cost: 36,
+    rarity: "rare",
   },
   {
     kind: "segment_vacuum",
     title: "Coil vacuum",
     blurb: "High-tier: segments pull nearby gems toward the head.",
     cost: 52,
+    rarity: "legendary",
+  },
+  {
+    kind: "add_2_blasters",
+    title: "Add 2 Blaster Segments",
+    blurb: "Legendary: grow two armed barrels at once.",
+    cost: 88,
+    rarity: "legendary",
   },
 ];
 
 export const MAX_SEGMENTS = 14;
+export const SHOP_REROLL_COST = 5;
+export const SHOP_INTEREST_RATE = 0.1;
+export const SHOP_COST_GROWTH = 1.5;
+
+const WEIGHT_LEGENDARY = 5;
+const WEIGHT_RARE = 25;
+
+export function purchasesOf(history: ShopKind[], kind: ShopKind) {
+  return history.filter((k) => k === kind).length;
+}
+
+export function scaledOfferCost(base: number, wave: number, bought: number) {
+  const waveScale = 1 + (wave - 1) * 0.15;
+  return Math.max(1, Math.round(base * SHOP_COST_GROWTH ** bought * waveScale));
+}
+
+export function bankInterest(gold: number) {
+  return Math.floor(Math.max(0, gold) * SHOP_INTEREST_RATE);
+}
+
+function rollRarity(): ShopRarity {
+  const n = Math.random() * 100;
+  if (n < WEIGHT_LEGENDARY) return "legendary";
+  if (n < WEIGHT_LEGENDARY + WEIGHT_RARE) return "rare";
+  return "common";
+}
+
+function pickOne<T>(list: T[]): T | undefined {
+  if (!list.length) return undefined;
+  return list[Math.floor(Math.random() * list.length)];
+}
 
 export function rollShopOffers(
   wave: number,
   segments: number,
   owned: { segmentVacuum?: boolean } = {},
+  history: ShopKind[] = [],
 ): ShopOffer[] {
-  const scale = 1 + (wave - 1) * 0.15;
   const pool = CATALOG.filter((c) => {
     if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS) return false;
+    if (c.kind === "add_2_blasters" && segments + 2 > MAX_SEGMENTS) return false;
     if (c.kind === "segment_vacuum" && owned.segmentVacuum) return false;
     return true;
-  }).map((c) => ({
-    ...c,
-    cost: Math.max(1, Math.round(c.cost * scale)),
-  }));
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const tmp = pool[i]!;
-    pool[i] = pool[j]!;
-    pool[j] = tmp;
+  });
+
+  const taken = new Set<ShopKind>();
+  const offers: ShopOffer[] = [];
+  for (let i = 0; i < 3; i++) {
+    const rarity = rollRarity();
+    const unused = pool.filter((c) => !taken.has(c.kind));
+    const preferred = unused.filter((c) => c.rarity === rarity);
+    const item = pickOne(preferred.length ? preferred : unused);
+    if (!item) break;
+    taken.add(item.kind);
+    offers.push({
+      ...item,
+      cost: scaledOfferCost(item.cost, wave, purchasesOf(history, item.kind)),
+      id: `${item.kind}-w${wave}-${i}-${Date.now().toString(36)}`,
+    });
   }
-  return pool.slice(0, 3).map((c, i) => ({
-    ...c,
-    id: `${c.kind}-w${wave}-${i}`,
-  }));
+  return offers;
 }
 
 export function canAffordAny(gold: number, offers: ShopOffer[]) {

@@ -1,5 +1,5 @@
 import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS } from "./constants";
-import { canAffordAny, type ShopKind, type ShopOffer } from "./shop";
+import { SHOP_REROLL_COST, type ShopKind, type ShopOffer } from "./shop";
 
 export type HudSnap = {
   playing: boolean;
@@ -21,6 +21,7 @@ export type HudSnap = {
   shopPicked: string | null;
   fever: boolean;
   combo: number;
+  lastInterest: number;
 };
 
 type Bucket = {
@@ -28,9 +29,11 @@ type Bucket = {
   started: boolean;
   restartRequested: boolean;
   nextWaveRequested: boolean;
+  rerollRequested: boolean;
   pendingUpgrade: ShopKind | null;
   shopOffers: ShopOffer[];
   shopPicked: string | null;
+  purchaseHistory: ShopKind[];
   injected: Set<string> | null;
   stickX: number;
   stickY: number;
@@ -55,6 +58,7 @@ const emptyHud = (): HudSnap => ({
   shopPicked: null,
   fever: false,
   combo: 0,
+  lastInterest: 0,
 });
 
 const fallback: Bucket = {
@@ -62,9 +66,11 @@ const fallback: Bucket = {
   started: false,
   restartRequested: false,
   nextWaveRequested: false,
+  rerollRequested: false,
   pendingUpgrade: null,
   shopOffers: [],
   shopPicked: null,
+  purchaseHistory: [],
   injected: null,
   stickX: 0,
   stickY: 0,
@@ -81,9 +87,11 @@ export function runtime(): Bucket {
       started: false,
       restartRequested: false,
       nextWaveRequested: false,
+      rerollRequested: false,
       pendingUpgrade: null,
       shopOffers: [],
       shopPicked: null,
+      purchaseHistory: [],
       injected: null,
       stickX: 0,
       stickY: 0,
@@ -91,6 +99,7 @@ export function runtime(): Bucket {
       listeners: new Set(),
     };
   }
+  if (!w.__vsRuntime.purchaseHistory) w.__vsRuntime.purchaseHistory = [];
   return w.__vsRuntime;
 }
 
@@ -117,9 +126,11 @@ export function requestRestart() {
   const b = runtime();
   b.restartRequested = true;
   b.nextWaveRequested = false;
+  b.rerollRequested = false;
   b.pendingUpgrade = null;
   b.shopOffers = [];
   b.shopPicked = null;
+  b.purchaseHistory = [];
   b.started = true;
   patchHud({
     playing: true,
@@ -135,6 +146,7 @@ export function requestRestart() {
     shopPicked: null,
     fever: false,
     combo: 0,
+    lastInterest: 0,
   });
 }
 
@@ -154,11 +166,21 @@ export function pickShopOffer(id: string) {
   if (b.snap.gold < offer.cost) return;
   b.shopPicked = id;
   b.pendingUpgrade = offer.kind;
+  b.purchaseHistory = [...b.purchaseHistory, offer.kind];
   patchHud({ shopPicked: id, gold: b.snap.gold - offer.cost });
+}
+
+export function requestReroll() {
+  const b = runtime();
+  if (!b.snap.waveClear || b.snap.dead) return;
+  if (b.shopPicked) return;
+  if (b.snap.gold < SHOP_REROLL_COST) return;
+  patchHud({ gold: b.snap.gold - SHOP_REROLL_COST });
+  b.rerollRequested = true;
 }
 
 export function requestNextWave() {
   const b = runtime();
-  if (!b.shopPicked && canAffordAny(b.snap.gold, b.shopOffers)) return;
+  if (!b.snap.waveClear || b.snap.dead) return;
   b.nextWaveRequested = true;
 }
