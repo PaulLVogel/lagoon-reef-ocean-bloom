@@ -5,6 +5,8 @@ import {
   DEFAULT_SEGMENT_COUNT,
   HEAD_RADIUS,
   HISTORY_STRIDE,
+  PICKUP_RADIUS_BASE,
+  PICKUP_RADIUS_STEP,
   SEGMENT_RADIUS,
   WORLD_SIZE,
 } from "./constants";
@@ -27,10 +29,13 @@ export class SnakePlayer {
   facing = 0;
   vx = 0;
   vy = 0;
+  pickupBonus = 0;
+  segmentVacuum = false;
 
   private readonly scene: Phaser.Scene;
   private readonly historyStride: number;
   private readonly headGlow: Phaser.GameObjects.Arc;
+  private readonly pickupRing: Phaser.GameObjects.Arc;
   private readonly snout: Phaser.GameObjects.Triangle;
   private readonly blades: Phaser.GameObjects.Rectangle[] = [];
   private bladeAngle = 0;
@@ -52,6 +57,8 @@ export class SnakePlayer {
     this.head.setDepth(20);
 
     this.headGlow = scene.add.circle(0, 0, HEAD_RADIUS + 7, COLOR.head, 0.12);
+    this.pickupRing = scene.add.circle(0, 0, PICKUP_RADIUS_BASE, COLOR.gemGreen, 0.07);
+    this.pickupRing.setStrokeStyle(1, COLOR.gemGreen, 0.28);
     const headBody = scene.add.circle(0, 0, HEAD_RADIUS, COLOR.head);
     headBody.setStrokeStyle(2, 0xffffff, 0.18);
     this.snout = scene.add.triangle(
@@ -67,7 +74,7 @@ export class SnakePlayer {
     );
     const eyeY = scene.add.circle(4, -5, 2.4, COLOR.eye);
     const eyeX = scene.add.circle(4, 5, 2.4, COLOR.eye);
-    this.head.add([this.headGlow, headBody, this.snout, eyeY, eyeX]);
+    this.head.add([this.pickupRing, this.headGlow, headBody, this.snout, eyeY, eyeX]);
 
     const maxHistory = (segmentCount + 4) * this.historyStride + 48;
     for (let i = maxHistory - 1; i >= 0; i--) {
@@ -94,6 +101,20 @@ export class SnakePlayer {
 
   getRadius() {
     return HEAD_RADIUS;
+  }
+
+  get pickupRadius() {
+    return PICKUP_RADIUS_BASE + this.pickupBonus * PICKUP_RADIUS_STEP;
+  }
+
+  boostPickupRadius() {
+    this.pickupBonus += 1;
+    this.pickupRing.setRadius(this.pickupRadius);
+  }
+
+  enableSegmentVacuum() {
+    this.segmentVacuum = true;
+    this.pickupRing.setStrokeStyle(1.5, COLOR.magnet, 0.45);
   }
 
   getParts(): { x: number; y: number; r: number }[] {
