@@ -5,13 +5,19 @@ Live Vercel: https://vampire-snake-o34e.vercel.app/
 
 Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new work.
 
-Last shipped: **infinite eras + recurring bosses** — boss on every `wave % 10 === 0`, era `floor((wave-1)/10)` multiplies horde HP/dmg/spawn, boss HP/contact/shots scale by era, killing the boss ends the wave and opens shop. Flanker is still not in the repo. Bard head spritesheet (`BARD_SHEET`) is live on GitHub — do not drop those constants.
+## Future-chat contract
 
-## Era / boss rules
-- `isBossWave`: `wave > 0 && wave % BOSS_WAVE === 0`.
-- `eraIndex`: `floor((wave-1)/10)` — 0 on waves 1–10, 1 on 11–20.
-- Horde HP/contact: `(1+(wave-1)*0.18 or 0.1) * ERA_HORDE_MUL^era` (1.75).
-- Spawn interval also divides by `ERA_SPAWN_MUL^era` (1.35).
-- Boss HP/contact: linear wave curve times `ERA_BOSS_HP_MUL^era` (2.1) / `ERA_BOSS_DMG_MUL^era` (1.65). Shots scale with contact.
-- Kill-boss: gem dump + `endWave()` so shop opens. Timer still ends the wave if the boss lives.
-- Do not invent Flanker.
+1. Read **this file** and **`PROJECT_CONTEXT.md`** (repo root, also copied to `artifacts/`) first.
+2. Implement **only** the phase or bug the user named this turn.
+3. Do **not** rebuild Phases 1–6, the drop hook, the collect hook, or the app shell. Do **not** invent Phase 7 unless named.
+4. Change the fewest files. Push those to `PaulLVogel/lagoon-reef-ocean-bloom` `main`.
+5. Never commit `.vercel/output`.
+6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
+7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
+
+8. Shop multi-buy is live: overlay can buy several cards before Next Wave. `pickShopOffer` appends to `runtime.pendingBuys`. **`MainScene` must drain that whole queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame.
+9. **Flanker** is in the base horde pool (waves 1–4+). **Tangled** overlap penalty is still **not** in this repo. Do not invent Tangled unless named.
+10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
+11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
+
+Last shipped: **boss-loop reset + dynamic horde unlocks** — living-boss check on `wave % 10 === 0` so waves 20/30 still spawn. Pool: flanker from wave 1, armored brute 5, charger 11, siege 15. Era multipliers apply to every horde kind.
