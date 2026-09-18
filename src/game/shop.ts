@@ -92,6 +92,8 @@ export const MAX_SEGMENTS = 14;
 export const SHOP_REROLL_COST = 5;
 export const SHOP_INTEREST_RATE = 0.1;
 export const SHOP_COST_GROWTH = 1.5;
+export const SHOP_PITY_HP = 10;
+export const SHOP_PITY_GOLD = 2;
 
 const WEIGHT_LEGENDARY = 5;
 const WEIGHT_RARE = 25;
@@ -154,4 +156,22 @@ export function rollShopOffers(
 
 export function canAffordAny(gold: number, offers: ShopOffer[]) {
   return offers.some((o) => gold >= o.cost);
+}
+
+export function offersFromKinds(
+  kinds: ShopKind[],
+  wave: number,
+  history: ShopKind[] = [],
+): ShopOffer[] {
+  const offers: ShopOffer[] = [];
+  kinds.forEach((kind, i) => {
+    const item = CATALOG.find((c) => c.kind === kind);
+    if (!item) return;
+    offers.push({
+      ...item,
+      cost: scaledOfferCost(item.cost, wave, purchasesOf(history, kind)),
+      id: `${item.kind}-w${wave}-held-${i}`,
+    });
+  });
+  return offers;
 }
