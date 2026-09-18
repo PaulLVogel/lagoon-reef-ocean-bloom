@@ -4,6 +4,7 @@ export const TILE = 96;
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 export const DESKTOP_ZOOM = 1;
+/** Mobile zoom-out: ~2/3 of desktop zoom so more of the arena is visible. */
 export const MOBILE_ZOOM = 2 / 3;
 export const MOBILE_WIDTH = 820;
 
@@ -45,6 +46,7 @@ export const MAGNET_SPEED = 420;
 export const HEALTH_SIZE = 11;
 export const MAGNET_SIZE = 12;
 
+/** Collect reach is larger than the physical head hitbox. */
 export const PICKUP_RADIUS_BASE = HEAD_RADIUS + GEM_RADIUS + 14;
 export const PICKUP_RADIUS_STEP = 16;
 export const SEGMENT_VACUUM_RADIUS = 52;
@@ -68,7 +70,8 @@ export const COLOR = {
   grid: 0x171b22,
   gridLine: 0x222833,
   bound: 0x2a3140,
-  head: 0xf3ebe6,
+  head: 0xf5e6b8,
+  headStroke: 0xfff8dc,
   snout: 0xfff8f4,
   eye: 0x1a1210,
   segment: 0xb85c57,
@@ -90,9 +93,10 @@ export const COLOR = {
   coneBurst: 0x7dd3fc,
   meleeSlash: 0xfbbf24,
   mine: 0xf97316,
-  rail: 0x67e8f9,
-  chain: 0xc4b5fd,
+  rail: 0xef4444,
+  chain: 0x22d3ee,
   aura: 0xa3e635,
+  mortar: 0x22c55e,
   hp: 0xb85c57,
   gemGreen: 0x22d3ee,
   gemBlue: 0xfacc15,
