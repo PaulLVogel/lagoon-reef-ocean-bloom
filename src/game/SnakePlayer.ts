@@ -142,6 +142,17 @@ export class SnakePlayer {
     this.speed = Math.min(cap, this.speed * mul);
   }
 
+  heal(amount: number) {
+    this.headGlow.setFillStyle(0x86efac, 0.62);
+    this.head.setScale(1.08);
+    this.scene.time.delayedCall(160, () => {
+      if (!this.head.active) return;
+      this.headGlow.setFillStyle(COLOR.head, 0.12);
+      this.head.setScale(1);
+    });
+    return amount;
+  }
+
   update(dt: number, ax: number, ay: number, now: number, aim: AimPoint | null, combatOn: boolean) {
     const moving = ax !== 0 || ay !== 0;
     if (moving) {

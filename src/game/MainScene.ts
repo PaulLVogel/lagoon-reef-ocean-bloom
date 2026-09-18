@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import {
   COLOR,
   ENEMY_CONTACT_DAMAGE,
+  ENEMY_HP,
   ENEMY_RADIUS,
   HUD_TICK_MS,
   MAX_ENEMIES,
@@ -140,7 +141,11 @@ export class MainScene extends Phaser.Scene {
           if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
         }
         this.checkPlayerContact(time);
-        this.gold += this.gems.collectHead(this.player.x, this.player.y, dt);
+        const loot = this.gems.collectHead(this.player.x, this.player.y, dt);
+        this.gold += loot.gold;
+        if (loot.heal > 0) {
+          this.playerHp = Math.min(100, this.playerHp + this.player.heal(loot.heal));
+        }
         this.pruneDead();
       }
     }
@@ -290,7 +295,11 @@ export class MainScene extends Phaser.Scene {
       y = Phaser.Math.Clamp(y, ENEMY_RADIUS + 8, WORLD_SIZE - ENEMY_RADIUS - 8);
       tries += 1;
     } while (view.contains(x, y) && tries < 8);
-    this.enemies.push(new Enemy(this, x, y));
+    this.enemies.push(new Enemy(this, x, y, this.rollEnemyHp()));
+  }
+
+  private rollEnemyHp() {
+    return ENEMY_HP + (this.wave - 1) * 6 + Phaser.Math.Between(0, 10);
   }
 
   private hitEnemiesAt(x: number, y: number, dmg: number, r: number) {
@@ -306,11 +315,12 @@ export class MainScene extends Phaser.Scene {
     if (!e.alive) return;
     const x = e.x;
     const y = e.y;
+    const hpBand = e.maxHp;
     e.hit(dmg);
     this.floatDmg(x, y, dmg);
     if (!e.alive) {
       this.kills += 1;
-      this.gems.spawn(x, y);
+      this.gems.spawnFromKill(x, y, hpBand);
     }
   }
 

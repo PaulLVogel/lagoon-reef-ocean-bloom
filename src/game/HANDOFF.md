@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/`.
 
-Last shipped: **Phase 6** on `main` (`78ea937`).
+Last shipped: **Phase 6 drop hook** (tiered gems, pop scatter, health, magnet) on `main`.
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**.
@@ -29,12 +29,12 @@ Last shipped: **Phase 6** on `main` (`78ea937`).
 ## File map
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, segments, weapons, trail, upgrade apply helpers |
+| `src/game/SnakePlayer.ts` | head, segments, weapons, trail, `heal()`, upgrade apply helpers |
 | `src/game/Weapon.ts` | `Weapon` / `FireEvent` / default loadout |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, gem collect |
-| `src/game/Gems.ts` | colored EXP gem pool, head pickup, vacuum |
+| `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum |
 | `src/game/shop.ts` | catalog + costs + `rollShopOffers` + `canAffordAny` |
-| `src/game/Enemy.ts` | purple chasers |
+| `src/game/Enemy.ts` | purple chasers (`maxHp` for gem tier) |
 | `src/game/Projectiles.ts` | bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap (incl. gold), `pickShopOffer()`, `requestNextWave()` |
 | `src/game/constants.ts` | tunables including gem values |
@@ -48,9 +48,12 @@ Last shipped: **Phase 6** on `main` (`78ea937`).
 | 2 | blade | two orbiting rects, 160ms CD, 5 dmg |
 
 ## Phase 6
-- Kill → gem drop (green 1 / blue 3 / gold 8).
-- `collectHead` uses head x/y + `HEAD_RADIUS`. Segments ignored.
-- `endWave()` vacuums leftover gems into gold, then rolls 3 priced offers.
+- Kill → `gems.spawnFromKill` from `applyEnemyHit`.
+- Gems by enemy `maxHp`: green 1 / blue 5 / red 10.
+- Pop scatter: `Phaser.Math.Between(-50, 50)` + high drag. Head-only pickup.
+- 5% red-square health pack → `player.heal(10)`.
+- 3% purple diamond magnet → all live gems fly to the head.
+- `endWave()` vacuums leftover **gems** into gold, then rolls 3 priced offers.
 - `pickShopOffer` deducts cost. Gold carries across waves. Restart zeros gold.
 - If nothing is affordable, Next Wave is allowed without a pick.
 - While `waveClear`, HUD tick must not overwrite shop-deducted gold.

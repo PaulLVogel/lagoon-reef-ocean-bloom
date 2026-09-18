@@ -3,11 +3,14 @@ import { COLOR, ENEMY_HP, ENEMY_RADIUS, ENEMY_SPEED } from "./constants";
 
 export class Enemy {
   readonly root: Phaser.GameObjects.Container;
-  hp = ENEMY_HP;
+  hp: number;
+  readonly maxHp: number;
   readonly radius = ENEMY_RADIUS;
   private readonly body: Phaser.GameObjects.Arc;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, hp = ENEMY_HP) {
+    this.hp = hp;
+    this.maxHp = hp;
     this.root = scene.add.container(x, y);
     this.root.setDepth(11);
     const halo = scene.add.circle(0, 0, ENEMY_RADIUS + 6, COLOR.enemy, 0.2);

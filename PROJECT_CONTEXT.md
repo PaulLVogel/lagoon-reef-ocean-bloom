@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Phase 6 (economy & EXP)** on `main` (`78ea937`).
+Last shipped: **Phase 6 drop hook** (tiered gems / pop / health / magnet).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Also copy both into `artifacts/` so the next chat can read them if the workspace is a fresh scaffold.
 
@@ -53,11 +53,13 @@ Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 On `hud.waveClear`, Shop overlay with 3 randomized upgrades. Pick one (applies in-place). **Next Wave** via `requestNextWave()` — resets 30s timer, bumps `wave`, resumes spawning. Keeps HP/kills/loadout. Does **not** `scene.restart()`.
 
 ### [x] Phase 6: Economy & EXP
-Enemies drop green / blue / gold gems (1 / 3 / 8). Head-only pickup. Vacuum leftover at 00:00. Gold is shop currency. Offers have costs (scale with wave). Leftover gold carries. Death Restart zeros gold. If nothing is affordable, Next Wave is allowed without a pick.
+Enemies drop green / blue / red gems (1 / 5 / 10) by enemy HP. Head-only pickup. Pop scatter on spawn. 5% health pack (red square, `player.heal(10)`). 3% magnet (purple diamond, vacuum gems to head). Leftover gems vacuum to gold at 00:00. Gold is shop currency. Offers have costs (scale with wave). Leftover gold carries. Death Restart zeros gold. If nothing is affordable, Next Wave is allowed without a pick.
 
 ## 5. Phase 6 hook points (for later work)
-- Drops: `src/game/Gems.ts` spawned from `MainScene.applyEnemyHit`.
+- Drops: `src/game/Gems.ts` spawned from `MainScene.applyEnemyHit` via `spawnFromKill`.
 - Collect: `gems.collectHead(player.x, player.y)` — head position only.
 - Shop cost: `ShopOffer.cost`; `pickShopOffer` deducts `hud.gold`.
 - Skip: `requestNextWave` allowed without a pick if `canAffordAny` is false.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted).
+- Heal: `SnakePlayer.heal(10)` on health-pack pickup.
+- Magnet: `Gems.activateMagnet()` flies live gems to the head.

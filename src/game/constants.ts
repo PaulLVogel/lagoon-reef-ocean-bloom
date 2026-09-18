@@ -25,8 +25,16 @@ export const WAVE_DURATION_MS = 30_000;
 export const GEM_POOL = 80;
 export const GEM_RADIUS = 6;
 export const GEM_GREEN_VALUE = 1;
-export const GEM_BLUE_VALUE = 3;
-export const GEM_GOLD_VALUE = 8;
+export const GEM_BLUE_VALUE = 5;
+export const GEM_RED_VALUE = 10;
+export const GEM_POP = 50;
+export const GEM_DRAG = 8;
+export const HEALTH_DROP_CHANCE = 0.05;
+export const MAGNET_DROP_CHANCE = 0.03;
+export const HEALTH_HEAL = 10;
+export const MAGNET_SPEED = 420;
+export const HEALTH_SIZE = 11;
+export const MAGNET_SIZE = 12;
 
 export const COLOR = {
   arena: 0x0c0e12,
@@ -50,7 +58,10 @@ export const COLOR = {
   hp: 0xb85c57,
   gemGreen: 0x5eead4,
   gemBlue: 0x60a5fa,
+  gemRed: 0xf87171,
   gemGold: 0xf4d35e,
+  health: 0xef4444,
+  magnet: 0xc084fc,
 } as const;
 
 export const HUD_TICK_MS = 80;
