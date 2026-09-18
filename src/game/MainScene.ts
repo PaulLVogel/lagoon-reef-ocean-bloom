@@ -1,11 +1,14 @@
 import * as Phaser from "phaser";
 import {
   COLOR,
+  COMBO_TRIGGER,
+  COMBO_WINDOW_MS,
   ENEMY_CONTACT_DAMAGE,
   ENEMY_HP,
   ENEMY_RADIUS,
   HUD_TICK_MS,
   MAX_ENEMIES,
+  PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS,
   SPAWN_INTERVAL_MIN_MS,
   SPAWN_INTERVAL_MS,
@@ -37,8 +40,11 @@ export class MainScene extends Phaser.Scene {
   private wave = 1;
   private waveMs = WAVE_DURATION_MS;
   private hudAcc = 0;
+  private gemTimes: number[] = [];
+  private feverUntil = 0;
   private unbindKeys: (() => void) | null = null;
   private floor!: Phaser.GameObjects.TileSprite;
+  private audioCtx: AudioContext | null = null;
 
   constructor() {
     super("main");
@@ -56,6 +62,8 @@ export class MainScene extends Phaser.Scene {
     this.wave = 1;
     this.waveMs = WAVE_DURATION_MS;
     this.enemies = [];
+    this.gemTimes = [];
+    this.feverUntil = 0;
   }
 
   create() {
@@ -141,11 +149,7 @@ export class MainScene extends Phaser.Scene {
           if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
         }
         this.checkPlayerContact(time);
-        const loot = this.gems.collectHead(this.player.x, this.player.y, dt);
-        this.gold += loot.gold;
-        if (loot.heal > 0) {
-          this.playerHp = Math.min(100, this.playerHp + this.player.heal(loot.heal));
-        }
+        this.collectLoot(dt, time);
         this.pruneDead();
       }
     }
@@ -165,6 +169,8 @@ export class MainScene extends Phaser.Scene {
           wave: this.wave,
         };
         if (!this.waveClear) hud.gold = this.gold;
+        hud.fever = time < this.feverUntil;
+        hud.combo = this.gemTimes.length;
         patchHud(hud);
       }
     }
@@ -182,7 +188,11 @@ export class MainScene extends Phaser.Scene {
     this.enemies = [];
     this.shots.clear();
     this.gold += this.gems.vacuum();
-    const offers = rollShopOffers(this.wave, this.player.segments.length);
+    this.gemTimes = [];
+    this.feverUntil = 0;
+    const offers = rollShopOffers(this.wave, this.player.segments.length, {
+      segmentVacuum: this.player.segmentVacuum,
+    });
     const bucket = runtime();
     bucket.shopOffers = offers;
     bucket.shopPicked = null;
@@ -200,6 +210,8 @@ export class MainScene extends Phaser.Scene {
       hp: this.playerHp,
       kills: this.kills,
       gold: this.gold,
+      fever: false,
+      combo: 0,
     });
   }
 
@@ -209,6 +221,8 @@ export class MainScene extends Phaser.Scene {
     this.waveClear = false;
     this.spawnAcc = 0;
     this.gold = runtime().snap.gold;
+    this.gemTimes = [];
+    this.feverUntil = 0;
     const bucket = runtime();
     bucket.shopOffers = [];
     bucket.shopPicked = null;
@@ -226,6 +240,8 @@ export class MainScene extends Phaser.Scene {
       kills: this.kills,
       gold: this.gold,
       speed: Math.round(this.player.speed),
+      fever: false,
+      combo: 0,
     });
   }
 
@@ -242,6 +258,10 @@ export class MainScene extends Phaser.Scene {
       this.player.boostDamage("turret", 3);
     } else if (kind === "heal") {
       this.playerHp = Math.min(100, this.playerHp + 30);
+    } else if (kind === "pickup_radius") {
+      this.player.boostPickupRadius();
+    } else if (kind === "segment_vacuum") {
+      this.player.enableSegmentVacuum();
     }
     patchHud({
       segments: this.player.segments.length,
@@ -364,6 +384,82 @@ export class MainScene extends Phaser.Scene {
 
   private pruneDead() {
     this.enemies = this.enemies.filter((e) => e.alive);
+  }
+
+  private collectLoot(dt: number, now: number) {
+    const loot = this.gems.collectHead(this.player.x, this.player.y, dt, {
+      pickupRadius: this.player.pickupRadius,
+      segments: this.player.segments,
+      segmentVacuum: this.player.segmentVacuum,
+    });
+    if (loot.heal > 0) {
+      this.playerHp = Math.min(100, this.playerHp + this.player.heal(loot.heal));
+    }
+    for (const ev of loot.events) {
+      if (ev.kind === "gem") {
+        const alreadyFever = now < this.feverUntil;
+        this.gemTimes.push(now);
+        const cutoff = now - COMBO_WINDOW_MS;
+        this.gemTimes = this.gemTimes.filter((t) => t >= cutoff);
+        if (this.gemTimes.length > COMBO_TRIGGER) {
+          this.feverUntil = now + COMBO_WINDOW_MS;
+        }
+        const value = alreadyFever ? ev.gold * 2 : ev.gold;
+        this.gold += value;
+        this.floatPickup(ev.x, ev.y, `+${value}`, alreadyFever);
+        this.playBlip(alreadyFever);
+      } else if (ev.kind === "health") {
+        this.floatPickup(ev.x, ev.y, "+HP", false);
+        this.playBlip(false);
+      } else {
+        this.floatPickup(ev.x, ev.y, "MAG", false);
+        this.playBlip(false);
+      }
+    }
+  }
+
+  private floatPickup(x: number, y: number, label: string, fever: boolean) {
+    const t = this.add.text(x, y, label, {
+      fontFamily: "IBM Plex Mono, monospace",
+      fontSize: fever ? "16px" : "14px",
+      color: fever ? "#f4d35e" : "#5eead4",
+    });
+    t.setOrigin(0.5);
+    t.setDepth(31);
+    this.tweens.add({
+      targets: t,
+      y: y - 32,
+      alpha: 0,
+      duration: PICKUP_FLOAT_MS,
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  private playBlip(fever: boolean) {
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      if (!this.audioCtx) this.audioCtx = new AC();
+      const ctx = this.audioCtx;
+      if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const start = fever ? 1320 : 980;
+      const end = fever ? 1980 : 1560;
+      osc.frequency.setValueAtTime(start, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(end, ctx.currentTime + 0.055);
+      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {
+      /* audio optional */
+    }
   }
 
   private floatDmg(x: number, y: number, dmg: number) {
