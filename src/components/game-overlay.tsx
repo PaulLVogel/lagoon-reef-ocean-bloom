@@ -1,4 +1,4 @@
-import { Crosshair, Gauge, Heart, Play, Plus, Zap } from "lucide-react";
+import { Circle, Crosshair, Gauge, Heart, Magnet, Play, Plus, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isGameStarted, setGameStarted } from "@/game/input";
 import {
@@ -24,6 +24,8 @@ function shopIcon(kind: ShopKind) {
   if (kind === "turret_rate" || kind === "blaster_rate") return Gauge;
   if (kind === "snake_speed") return Zap;
   if (kind === "heal") return Heart;
+  if (kind === "pickup_radius") return Circle;
+  if (kind === "segment_vacuum") return Magnet;
   return Crosshair;
 }
 
@@ -74,6 +76,7 @@ export function GameOverlay() {
           <Stat label="Gold" value={String(gold)} />
           <Stat label="Kills" value={String(hud.kills ?? 0)} />
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
+          {hud.fever ? <Stat label="Fever" value={`x2 · ${hud.combo ?? 0}`} /> : null}
         </div>
       </header>
 
