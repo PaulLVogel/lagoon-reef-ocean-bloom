@@ -26,17 +26,18 @@ type GemTier = {
   color: number;
   scale: number;
   minHp: number;
+  points: number;
 };
 
 const TIERS: GemTier[] = [
-  { value: GEM_GREEN_VALUE, color: COLOR.gemGreen, scale: 1, minHp: 0 },
-  { value: GEM_BLUE_VALUE, color: COLOR.gemBlue, scale: 1.15, minHp: 30 },
-  { value: GEM_RED_VALUE, color: COLOR.gemRed, scale: 1.35, minHp: 40 },
+  { value: GEM_GREEN_VALUE, color: COLOR.gemGreen, scale: 1, minHp: 0, points: 4 },
+  { value: GEM_BLUE_VALUE, color: COLOR.gemBlue, scale: 1.12, minHp: 30, points: 5 },
+  { value: GEM_RED_VALUE, color: COLOR.gemRed, scale: 1.28, minHp: 40, points: 6 },
 ];
 
 type Slot = {
   root: Phaser.GameObjects.Container;
-  gem: Phaser.GameObjects.Arc;
+  gem: Phaser.GameObjects.Star;
   health: Phaser.GameObjects.Rectangle;
   magnet: Phaser.GameObjects.Rectangle;
   kind: Kind;
@@ -86,13 +87,13 @@ export class Gems {
       root.setActive(false);
       root.setDepth(12);
 
-      const gem = scene.add.circle(0, 0, GEM_RADIUS, COLOR.gemGreen);
-      gem.setStrokeStyle(1, 0xffffff, 0.35);
+      const gem = scene.add.star(0, 0, 4, GEM_RADIUS + 3, GEM_RADIUS - 1, COLOR.gemGreen);
+      gem.setStrokeStyle(2, 0xffffff, 0.95);
       const health = scene.add.rectangle(0, 0, HEALTH_SIZE, HEALTH_SIZE, COLOR.health);
-      health.setStrokeStyle(1, 0xffffff, 0.45);
+      health.setStrokeStyle(2, 0xffffff, 0.85);
       health.setVisible(false);
       const magnet = scene.add.rectangle(0, 0, MAGNET_SIZE, MAGNET_SIZE, COLOR.magnet);
-      magnet.setStrokeStyle(1, 0xffffff, 0.5);
+      magnet.setStrokeStyle(2, 0xffffff, 0.9);
       magnet.setRotation(Math.PI / 4);
       magnet.setVisible(false);
 
@@ -112,7 +113,6 @@ export class Gems {
     }
   }
 
-  /** Kill drop: 5% health, rare magnet, else gem tiered by enemy HP. */
   spawnFromKill(x: number, y: number, enemyHp: number) {
     const roll = Math.random();
     if (roll < HEALTH_DROP_CHANCE) {
@@ -130,11 +130,6 @@ export class Gems {
     this.spawnFromKill(x, y, enemyHp);
   }
 
-  /**
-   * Head-only collect. Segments never pick up.
-   * Pickup uses a radius larger than the physical head hitbox.
-   * Optional segment vacuum pulls nearby gems toward the head.
-   */
   collectHead(hx: number, hy: number, dt: number, opts: CollectOpts = {}): PickupResult {
     const result: PickupResult = { gold: 0, heal: 0, magnet: false, events: [] };
     const reach = opts.pickupRadius ?? PICKUP_RADIUS_BASE;
@@ -145,6 +140,7 @@ export class Gems {
     for (const s of this.slots) {
       if (!s.live) continue;
       this.stepPhysics(s, hx, hy, dt, segs, vacR2);
+      if (s.kind === "gem") s.gem.rotation += dt * 2.4;
 
       const dx = hx - s.root.x;
       const dy = hy - s.root.y;
@@ -201,6 +197,7 @@ export class Gems {
     slot.kind = "gem";
     slot.value = tier.value;
     slot.gem.setFillStyle(tier.color, 1);
+    slot.gem.setStrokeStyle(2, 0xffffff, 1);
     slot.gem.setScale(tier.scale);
     slot.gem.setVisible(true);
     slot.health.setVisible(false);

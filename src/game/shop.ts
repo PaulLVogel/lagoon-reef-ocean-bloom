@@ -1,3 +1,4 @@
+import { GLOBAL_STAT_CATALOG } from "./stats";
 import {
   randomWeaponType,
   WEAPON_LABEL,
@@ -14,7 +15,13 @@ export type ShopKind =
   | "heal"
   | "pickup_radius"
   | "segment_vacuum"
-  | "credit_card";
+  | "credit_card"
+  | "stat_max_hp"
+  | "stat_move_speed"
+  | "stat_cooldown"
+  | "stat_damage"
+  | "stat_pickup"
+  | "stat_armor";
 
 export type ShopRarity = "common" | "rare" | "legendary";
 
@@ -103,6 +110,13 @@ const CATALOG: CatalogItem[] = [
     cost: 48,
     rarity: "rare",
   },
+  ...GLOBAL_STAT_CATALOG.map((s) => ({
+    kind: (`stat_${s.stat === "pickup_radius" ? "pickup" : s.stat}`) as ShopKind,
+    title: s.shopTitle,
+    blurb: s.shopBlurb,
+    cost: s.cost,
+    rarity: s.rarity,
+  })),
 ];
 
 export const MAX_SEGMENTS = 14;
