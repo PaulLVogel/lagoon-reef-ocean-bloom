@@ -4,7 +4,7 @@
 
 Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user asked this turn.
 
-- Do **not** rebuild Phase 1–6, the Vite/Phaser shell, or the whole game.
+- Do **not** rebuild Phase 1–6, the drop hook, the Vite/Phaser shell, or the whole game.
 - Do **not** invent extra phases, refactors, or new folders unless asked. There is **no named Phase 7** until the user names one.
 - Change the smallest set of files that implements the request.
 - Push those files to **canonical GitHub** `PaulLVogel/lagoon-reef-ocean-bloom` branch **`main`**.
@@ -14,9 +14,17 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Phase 6 drop hook** (tiered gems / pop / health / magnet).
+Last shipped: **Phase 6 drop hook** on `main` (`10b7df5`).
 
-Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Also copy both into `artifacts/` so the next chat can read them if the workspace is a fresh scaffold.
+Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
+
+- `artifacts/PROJECT_CONTEXT.md`
+- `artifacts/HANDOFF.md`
+- `artifacts/lagoon-reef-ocean-bloom/PROJECT_CONTEXT.md`
+- `artifacts/lagoon-reef-ocean-bloom/HANDOFF.md`
+- `artifacts/lagoon-reef-ocean-bloom/src/game/HANDOFF.md`
+
+so the next chat can read them if the workspace is a fresh scaffold.
 
 ## 1. Core Vision
 A browser-based arena survival game combining *Vampire Survivors* (auto-firing weapons, hordes of enemies), *Brotato* (30-second timed waves, between-round shop phases), and *Snake* (player is a head with trailing body segments, where weapons are attached to the segments).
@@ -33,7 +41,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
 *   **Assets:** Phaser geometric shapes only unless PNGs are requested.
 *   **Next Wave:** Never `scene.restart()` for shop continue. Death Restart still uses `scene.restart()`.
-*   **Gems:** Head collects only (`collectHead` uses `player.x` / `player.y`). Segments never pick up. Uncollected gems vacuum to gold at wave end.
+*   **Gems / pickups:** Head collects only (`collectHead` uses `player.x` / `player.y`). Segments never pick up. Uncollected **gems** vacuum to gold at wave end (health/magnet leftover are discarded).
 
 ## 4. Implementation Roadmap
 
@@ -52,14 +60,15 @@ Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 ### [x] Phase 5: The Shop Phase
 On `hud.waveClear`, Shop overlay with 3 randomized upgrades. Pick one (applies in-place). **Next Wave** via `requestNextWave()` — resets 30s timer, bumps `wave`, resumes spawning. Keeps HP/kills/loadout. Does **not** `scene.restart()`.
 
-### [x] Phase 6: Economy & EXP
-Enemies drop green / blue / red gems (1 / 5 / 10) by enemy HP. Head-only pickup. Pop scatter on spawn. 5% health pack (red square, `player.heal(10)`). 3% magnet (purple diamond, vacuum gems to head). Leftover gems vacuum to gold at 00:00. Gold is shop currency. Offers have costs (scale with wave). Leftover gold carries. Death Restart zeros gold. If nothing is affordable, Next Wave is allowed without a pick.
+### [x] Phase 6: Economy & EXP + drop hook (`10b7df5`)
+Enemies drop green / blue / red gems (1 / 5 / 10) by `maxHp`. Head-only pickup. Pop scatter on spawn. 5% health pack (red square, `player.heal(10)`). 3% magnet (purple diamond, live gems fly to head). Leftover gems vacuum to gold at 00:00. Gold is shop currency. Offers have costs (scale with wave). Leftover gold carries. Death Restart zeros gold. If nothing is affordable, Next Wave is allowed without a pick.
 
-## 5. Phase 6 hook points (for later work)
-- Drops: `src/game/Gems.ts` spawned from `MainScene.applyEnemyHit` via `spawnFromKill`.
-- Collect: `gems.collectHead(player.x, player.y)` — head position only.
+## 5. Phase 6 hook points (do not reimplement unless asked)
+- Drops: `src/game/Gems.ts` spawned from `MainScene.applyEnemyHit` via `spawnFromKill(x, y, e.maxHp)`.
+- Collect: `gems.collectHead(player.x, player.y, dt)` — returns `{ gold, heal, magnet }`. Head only.
+- Pop: `GEM_POP = 50`, `GEM_DRAG = 8` on the gem pool (not the snake).
+- Heal: `SnakePlayer.heal(amount)` on health-pack pickup; MainScene caps HP at 100.
+- Magnet: `Gems.activateMagnet()` flies live gems to the head.
 - Shop cost: `ShopOffer.cost`; `pickShopOffer` deducts `hud.gold`.
 - Skip: `requestNextWave` allowed without a pick if `canAffordAny` is false.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted).
-- Heal: `SnakePlayer.heal(10)` on health-pack pickup.
-- Magnet: `Gems.activateMagnet()` flies live gems to the head.
