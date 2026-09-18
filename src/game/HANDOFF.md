@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **Shop skip hook** on `main` (tactical skip, priced-out pity +10 HP / +2g, freeze offers, gray cards + green Next Wave pulse).
+Last shipped: **HUD gold hook** on `main` (tally tween, nextWaveBank, credit-card overdraft, lifetime wealth).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
@@ -77,3 +77,7 @@ Collect → `gems.collectHead(player.x, player.y, dt, { pickupRadius, segments, 
 - Freeze: lock the current 3 kinds; next shop rebuilds them (`offersFromKinds`) with wave-scaled costs. Reroll off while frozen. Pick or Restart clears freeze.
 - Priced-out UI: gray cards + pulsing green Next Wave (`.shop-next-pulse`).
 - While `waveClear`, HUD tick must not overwrite shop-deducted / reroll-deducted gold.
+- Gold tally: pick/reroll stores `goldTallyFrom`; MainScene `tallyGoldDisplay` tweens `goldDisplay` 300ms. Overlay reads `goldDisplay` (red if < 0). Ledger `gold` is instant.
+- Late shop gems: collect during `waveClear` adds to `nextWaveBank` only. Applied in `startNextWave` after the purchase, before interest.
+- Credit card shop kind: overdraft allowed; +2 blasters + 18% speed; once per run.
+- `totalGoldEarned` never shrinks on spend. Death screen shows lifetime + g/kill. Restart zeros it.

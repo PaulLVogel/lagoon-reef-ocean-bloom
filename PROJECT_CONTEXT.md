@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Shop skip hook** on `main` (tactical skip + interest, priced-out pity +10 HP / +2g, freeze 3 offers, gray cards + green Next Wave pulse).
+Last shipped: **HUD gold hook** on `main` (300ms tally tween, nextWaveBank for late gems in shop, credit-card overdraft, lifetime totalGoldEarned on death).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -86,3 +86,7 @@ Collect hook: pickup radius larger than head hitbox (shop `pickup_radius`), high
 - Priced-out UI: cards gray + `.shop-next-pulse` on Next Wave when nothing is affordable.
 - HUD gold: do not overwrite `snap.gold` from the scene while `waveClear` (shop already deducted / rerolled).
 - Death Restart zeros gold, `purchaseHistory`, and freeze.
+- HUD gold display: `goldDisplay` ticks from the pre-buy value to the ledger with a 300ms Phaser tween (`GOLD_TALLY_MS`) on pick or reroll. Ledger `gold` stays instant for shop math.
+- Shop-phase late gems: while `waveClear`, `collectHead` still runs. Gem gold goes to `nextWaveBank` (not `hud.gold`) so shop costs / interest / pity stay stable. Bank dumps into gold at `startNextWave`.
+- Credit card (`credit_card`): rare overdraft offer. Always purchasable. Deducts cost even if gold goes negative (red HUD). Grants +2 blaster segments and +18% speed. Once per run. Interest uses `max(0, gold)` so debt earns none.
+- Lifetime wealth: `totalGoldEarned` increments on gem collect, vacuum, interest, and pity. Purchases never subtract it. Death overlay shows earned + g/kill efficiency, separate from the spending pool.
