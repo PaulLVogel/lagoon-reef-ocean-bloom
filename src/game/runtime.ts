@@ -1,5 +1,5 @@
 import { DEFAULT_SEGMENT_COUNT, WAVE_DURATION_MS } from "./constants";
-import type { ShopKind, ShopOffer } from "./shop";
+import { canAffordAny, type ShopKind, type ShopOffer } from "./shop";
 
 export type HudSnap = {
   playing: boolean;
@@ -14,6 +14,7 @@ export type HudSnap = {
   hits?: number;
   kills: number;
   swarm: number;
+  gold: number;
   waveMs: number;
   wave: number;
   shopOffers: ShopOffer[];
@@ -45,6 +46,7 @@ const emptyHud = (): HudSnap => ({
   maxHp: 100,
   kills: 0,
   swarm: 0,
+  gold: 0,
   waveMs: WAVE_DURATION_MS,
   wave: 1,
   shopOffers: [],
@@ -122,6 +124,7 @@ export function requestRestart() {
     hp: 100,
     swarm: 0,
     kills: 0,
+    gold: 0,
     waveMs: WAVE_DURATION_MS,
     wave: 1,
     shopOffers: [],
@@ -142,13 +145,14 @@ export function pickShopOffer(id: string) {
   if (b.shopPicked) return;
   const offer = b.shopOffers.find((o) => o.id === id);
   if (!offer) return;
+  if (b.snap.gold < offer.cost) return;
   b.shopPicked = id;
   b.pendingUpgrade = offer.kind;
-  patchHud({ shopPicked: id });
+  patchHud({ shopPicked: id, gold: b.snap.gold - offer.cost });
 }
 
 export function requestNextWave() {
   const b = runtime();
-  if (!b.shopPicked) return;
+  if (!b.shopPicked && canAffordAny(b.snap.gold, b.shopOffers)) return;
   b.nextWaveRequested = true;
 }

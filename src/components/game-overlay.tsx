@@ -8,7 +8,7 @@ import {
   requestRestart,
   subscribeHud,
 } from "@/game/runtime";
-import type { ShopKind, ShopOffer } from "@/game/shop";
+import { canAffordAny, type ShopKind, type ShopOffer } from "@/game/shop";
 import { cn } from "@/lib/cn";
 import { VirtualStick } from "./virtual-stick";
 
@@ -40,13 +40,16 @@ export function GameOverlay() {
   const urgent = hud.waveMs <= 5000 && !hud.waveClear && isGameStarted();
   const offers = hud.shopOffers ?? [];
   const picked = hud.shopPicked;
+  const gold = hud.gold ?? 0;
+  const canBuy = canAffordAny(gold, offers);
+  const canContinue = Boolean(picked) || (offers.length > 0 && !canBuy);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
       <header className="flex items-start justify-between gap-3 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
         <div className="rounded-xl border border-border bg-surface/80 px-3 py-2 backdrop-blur-sm">
           <p className="font-display text-sm tracking-tight text-fg">Vampire Snake</p>
-          <p className="text-xs text-muted">Phase 5 · Wave {hud.wave ?? 1}</p>
+          <p className="text-xs text-muted">Phase 6 · Wave {hud.wave ?? 1}</p>
         </div>
         <div className="flex flex-col items-center">
           <div
@@ -68,6 +71,7 @@ export function GameOverlay() {
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Stat label="HP" value={`${hud.hp}/${hud.maxHp}`} />
+          <Stat label="Gold" value={String(gold)} />
           <Stat label="Kills" value={String(hud.kills ?? 0)} />
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
         </div>
@@ -78,7 +82,7 @@ export function GameOverlay() {
       <div className="flex items-end justify-between p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <VirtualStick className="pointer-events-auto md:hidden" />
         <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted md:block">
-          WASD · survive 30s
+          WASD · head collects gems
         </p>
         <div className="h-[120px] w-[120px] md:hidden" aria-hidden />
       </div>
@@ -93,8 +97,8 @@ export function GameOverlay() {
               Vampire Snake
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Thirty seconds. The swarm thickens as the clock dies. Clear a wave,
-              pick one upgrade, then go again.
+              Kill the swarm. Only the head picks up gems. Spend gold in the shop
+              between waves.
             </p>
             <ul className="mt-5 space-y-1.5 text-sm text-fg">
               <li className="flex gap-2">
@@ -103,11 +107,11 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">02</span>
-                Auto-fire from armed segments
+                Green / blue / gold gems — head only
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>
-                Shop between waves — loadout stays
+                Buy one upgrade, leftover gold carries
               </li>
             </ul>
             <button
@@ -136,7 +140,8 @@ export function GameOverlay() {
               The swarm got you
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              {hud.kills} kill{hud.kills === 1 ? "" : "s"} on wave {hud.wave ?? 1}.
+              {hud.kills} kill{hud.kills === 1 ? "" : "s"} · {gold} gold on wave{" "}
+              {hud.wave ?? 1}.
             </p>
             <button
               type="button"
@@ -164,31 +169,36 @@ export function GameOverlay() {
               Shop
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Pick one upgrade. Next wave keeps HP, kills, and loadout — timer
-              resets to 30s.
+              Spend gold on one upgrade. Leftover carries. Gems vacuum at 00:00.
             </p>
             <p className="mt-1 font-mono text-sm tabular-nums text-fg">
-              {hud.kills} kill{hud.kills === 1 ? "" : "s"}
+              {gold} gold · {hud.kills} kill{hud.kills === 1 ? "" : "s"}
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               {offers.map((offer) => (
                 <ShopCard
                   key={offer.id}
                   offer={offer}
+                  gold={gold}
                   selected={picked === offer.id}
                   locked={Boolean(picked) && picked !== offer.id}
                   onPick={() => pickShopOffer(offer.id)}
                 />
               ))}
             </div>
+            {!canBuy && !picked ? (
+              <p className="mt-3 text-sm text-muted">
+                Not enough gold this round — skip to the next wave.
+              </p>
+            ) : null}
             <button
               type="button"
-              disabled={!picked}
+              disabled={!canContinue}
               onClick={() => requestNextWave()}
               className={cn(
                 "mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl",
                 "text-sm font-medium transition-transform duration-(--motion-quick)",
-                picked
+                canContinue
                   ? "bg-fg text-bg hover:opacity-95 active:scale-[0.98]"
                   : "cursor-not-allowed bg-surface text-muted",
               )}
@@ -205,30 +215,36 @@ export function GameOverlay() {
 
 function ShopCard({
   offer,
+  gold,
   selected,
   locked,
   onPick,
 }: {
   offer: ShopOffer;
+  gold: number;
   selected: boolean;
   locked: boolean;
   onPick: () => void;
 }) {
   const Icon = shopIcon(offer.kind);
+  const unaffordable = gold < offer.cost && !selected;
   return (
     <button
       type="button"
-      disabled={locked}
+      disabled={locked || unaffordable}
       onClick={onPick}
       className={cn(
         "flex min-h-[9.5rem] flex-col rounded-2xl border p-4 text-left transition-transform duration-(--motion-quick)",
         selected
           ? "border-blood bg-blood/15"
           : "border-border bg-surface hover:border-fg/30",
-        locked ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
+        locked || unaffordable ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
       )}
     >
-      <Icon className={cn("size-5", selected ? "text-blood" : "text-fg")} strokeWidth={1.75} />
+      <div className="flex items-start justify-between gap-2">
+        <Icon className={cn("size-5", selected ? "text-blood" : "text-fg")} strokeWidth={1.75} />
+        <span className="font-mono text-xs tabular-nums text-muted">{offer.cost}g</span>
+      </div>
       <p className="font-display mt-3 text-lg leading-tight text-fg">{offer.title}</p>
       <p className="mt-1 text-sm leading-relaxed text-muted">{offer.blurb}</p>
     </button>

@@ -13,6 +13,7 @@ import {
   WORLD_SIZE,
 } from "./constants";
 import { Enemy } from "./Enemy";
+import { Gems } from "./Gems";
 import { installControlsTest } from "./controlsTest";
 import { isGameStarted, installKeyboard, sampleMove } from "./input";
 import { Projectiles } from "./Projectiles";
@@ -23,11 +24,13 @@ import { SnakePlayer } from "./SnakePlayer";
 export class MainScene extends Phaser.Scene {
   private player!: SnakePlayer;
   private shots!: Projectiles;
+  private gems!: Gems;
   private enemies: Enemy[] = [];
   private spawnAcc = 0;
   private playerHp = 100;
   private iFrameUntil = 0;
   private kills = 0;
+  private gold = 0;
   private dead = false;
   private waveClear = false;
   private wave = 1;
@@ -46,6 +49,7 @@ export class MainScene extends Phaser.Scene {
     this.playerHp = 100;
     this.iFrameUntil = 0;
     this.kills = 0;
+    this.gold = 0;
     this.dead = false;
     this.waveClear = false;
     this.wave = 1;
@@ -58,6 +62,7 @@ export class MainScene extends Phaser.Scene {
     const cx = WORLD_SIZE / 2;
     const cy = WORLD_SIZE / 2;
     this.shots = new Projectiles(this);
+    this.gems = new Gems(this);
     this.player = new SnakePlayer(this, cx, cy, (ev) => this.shots.spawn(ev));
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
     this.cameras.main.startFollow(this.player.head, true, 0.14, 0.14);
@@ -74,6 +79,7 @@ export class MainScene extends Phaser.Scene {
       hp: this.playerHp,
       maxHp: 100,
       kills: 0,
+      gold: 0,
       swarm: 0,
       dead: false,
       waveClear: false,
@@ -96,6 +102,7 @@ export class MainScene extends Phaser.Scene {
         if (bucket.pendingUpgrade) {
           const kind = bucket.pendingUpgrade;
           bucket.pendingUpgrade = null;
+          this.gold = bucket.snap.gold;
           this.applyUpgrade(kind);
         }
         if (bucket.nextWaveRequested) {
@@ -133,6 +140,7 @@ export class MainScene extends Phaser.Scene {
           if (bladeDmg > 0) this.applyEnemyHit(e, bladeDmg);
         }
         this.checkPlayerContact(time);
+        this.gold += this.gems.collectHead(this.player.x, this.player.y, dt);
         this.pruneDead();
       }
     }
@@ -141,7 +149,7 @@ export class MainScene extends Phaser.Scene {
     if (this.hudAcc >= HUD_TICK_MS) {
       this.hudAcc = 0;
       if (isGameStarted()) {
-        patchHud({
+        const hud: Parameters<typeof patchHud>[0] = {
           speed: Math.round(Math.hypot(this.player.vx, this.player.vy)),
           segments: this.player.segments.length,
           hp: this.playerHp,
@@ -150,7 +158,9 @@ export class MainScene extends Phaser.Scene {
           waveMs: this.waveMs,
           waveClear: this.waveClear,
           wave: this.wave,
-        });
+        };
+        if (!this.waveClear) hud.gold = this.gold;
+        patchHud(hud);
       }
     }
   }
@@ -166,6 +176,7 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
+    this.gold += this.gems.vacuum();
     const offers = rollShopOffers(this.wave, this.player.segments.length);
     const bucket = runtime();
     bucket.shopOffers = offers;
@@ -183,6 +194,7 @@ export class MainScene extends Phaser.Scene {
       segments: this.player.segments.length,
       hp: this.playerHp,
       kills: this.kills,
+      gold: this.gold,
     });
   }
 
@@ -191,6 +203,7 @@ export class MainScene extends Phaser.Scene {
     this.waveMs = WAVE_DURATION_MS;
     this.waveClear = false;
     this.spawnAcc = 0;
+    this.gold = runtime().snap.gold;
     const bucket = runtime();
     bucket.shopOffers = [];
     bucket.shopPicked = null;
@@ -206,6 +219,7 @@ export class MainScene extends Phaser.Scene {
       segments: this.player.segments.length,
       hp: this.playerHp,
       kills: this.kills,
+      gold: this.gold,
       speed: Math.round(this.player.speed),
     });
   }
@@ -227,6 +241,7 @@ export class MainScene extends Phaser.Scene {
     patchHud({
       segments: this.player.segments.length,
       hp: this.playerHp,
+      gold: this.gold,
       speed: Math.round(this.player.speed),
     });
   }
@@ -288,10 +303,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   private applyEnemyHit(e: Enemy, dmg: number) {
-    const wasAlive = e.alive;
+    if (!e.alive) return;
+    const x = e.x;
+    const y = e.y;
     e.hit(dmg);
-    this.floatDmg(e.x, e.y, dmg);
-    if (wasAlive && !e.alive) this.kills += 1;
+    this.floatDmg(x, y, dmg);
+    if (!e.alive) {
+      this.kills += 1;
+      this.gems.spawn(x, y);
+    }
   }
 
   private checkPlayerContact(now: number) {
@@ -321,7 +341,15 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
-    patchHud({ hp: 0, swarm: 0, playing: false, dead: true, waveClear: false });
+    this.gems.clear();
+    patchHud({
+      hp: 0,
+      swarm: 0,
+      playing: false,
+      dead: true,
+      waveClear: false,
+      gold: this.gold,
+    });
   }
 
   private pruneDead() {
@@ -394,6 +422,7 @@ export class MainScene extends Phaser.Scene {
     this.unbindKeys?.();
     this.unbindKeys = null;
     this.shots?.destroy();
+    this.gems?.destroy();
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.player?.destroy();

@@ -22,6 +22,12 @@ export const PLAYER_IFRAME_MS = 450;
 
 export const WAVE_DURATION_MS = 30_000;
 
+export const GEM_POOL = 80;
+export const GEM_RADIUS = 6;
+export const GEM_GREEN_VALUE = 1;
+export const GEM_BLUE_VALUE = 3;
+export const GEM_GOLD_VALUE = 8;
+
 export const COLOR = {
   arena: 0x0c0e12,
   grid: 0x171b22,
@@ -42,6 +48,9 @@ export const COLOR = {
   turret: 0xc5d0d8,
   blade: 0xd47872,
   hp: 0xb85c57,
+  gemGreen: 0x5eead4,
+  gemBlue: 0x60a5fa,
+  gemGold: 0xf4d35e,
 } as const;
 
 export const HUD_TICK_MS = 80;

@@ -4,7 +4,7 @@
 
 Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user asked this turn.
 
-- Do **not** rebuild Phase 1–5, the Vite/Phaser shell, or the whole game.
+- Do **not** rebuild Phase 1–6, the Vite/Phaser shell, or the whole game.
 - Do **not** invent extra phases, refactors, or new folders unless asked.
 - Change the smallest set of files that implements the request.
 - Push those files to **canonical GitHub** `PaulLVogel/lagoon-reef-ocean-bloom` branch **`main`**.
@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the workspace: copy from GitHub `main`. Do not start over.
 
-Last shipped: **Phase 5 (shop)** on `main`. Next named work is **Phase 6 (economy & EXP)**.
+Last shipped: **Phase 6 (economy & EXP)** on `main`.
 
 ## 1. Core Vision
 A browser-based arena survival game combining *Vampire Survivors* (auto-firing weapons, hordes of enemies), *Brotato* (30-second timed waves, between-round shop phases), and *Snake* (player is a head with trailing body segments, where weapons are attached to the segments).
@@ -31,6 +31,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
 *   **Assets:** Phaser geometric shapes only unless PNGs are requested.
 *   **Next Wave:** Never `scene.restart()` for shop continue. Death Restart still uses `scene.restart()`.
+*   **Gems:** Head collects only. Segments never pick up. Uncollected gems vacuum to gold at wave end.
 
 ## 4. Implementation Roadmap
 
@@ -49,11 +50,11 @@ Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 ### [x] Phase 5: The Shop Phase
 On `hud.waveClear`, Shop overlay with 3 randomized upgrades. Pick one (applies in-place). **Next Wave** via `requestNextWave()` — resets 30s timer, bumps `wave`, resumes spawning. Keeps HP/kills/loadout. Does **not** `scene.restart()`.
 
-### [ ] Phase 6: Economy & EXP
-Enemies drop colored EXP gems. Head (not segments) collects. Gems convert to shop currency.
+### [x] Phase 6: Economy & EXP
+Enemies drop green / blue / gold gems (1 / 3 / 8). Head-only pickup. Vacuum leftover at 00:00. Gold is shop currency. Offers have costs; leftover gold carries. Death Restart zeros gold.
 
-## 5. Phase 5 hook points (for Phase 6)
-- Shop catalog: `src/game/shop.ts` (`rollShopOffers`, `ShopKind`).
-- Pick: `pickShopOffer` → `runtime.pendingUpgrade` applied in `MainScene.applyUpgrade`.
-- Continue: `requestNextWave()` → `MainScene.startNextWave()`.
-- Overlay: `src/components/game-overlay.tsx` shop branch on `hud.waveClear`.
+## 5. Phase 6 hook points
+- Drops: `src/game/Gems.ts` spawned from `MainScene.applyEnemyHit`.
+- Collect: `gems.collectHead(player.x, player.y)` — head position only.
+- Shop cost: `ShopOffer.cost`; `pickShopOffer` deducts `hud.gold`.
+- Skip: `requestNextWave` allowed without a pick if nothing is affordable.
