@@ -1,4 +1,4 @@
-import { Circle, Crosshair, Gauge, Heart, Magnet, Play, Plus, Zap } from "lucide-react";
+import { Circle, Crosshair, Gauge, Heart, Lock, Magnet, Play, Plus, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isGameStarted, setGameStarted } from "@/game/input";
 import {
@@ -7,10 +7,14 @@ import {
   requestNextWave,
   requestReroll,
   requestRestart,
+  requestToggleFreeze,
   subscribeHud,
 } from "@/game/runtime";
 import {
+  canAffordAny,
   SHOP_INTEREST_RATE,
+  SHOP_PITY_GOLD,
+  SHOP_PITY_HP,
   SHOP_REROLL_COST,
   type ShopKind,
   type ShopOffer,
@@ -50,7 +54,9 @@ export function GameOverlay() {
   const offers = hud.shopOffers ?? [];
   const picked = hud.shopPicked;
   const gold = hud.gold ?? 0;
-  const canReroll = !picked && gold >= SHOP_REROLL_COST;
+  const shopFrozen = Boolean(hud.shopFrozen);
+  const pricedOut = !picked && offers.length > 0 && !canAffordAny(gold, offers);
+  const canReroll = !picked && !shopFrozen && gold >= SHOP_REROLL_COST;
   const interestPreview = Math.floor(gold * SHOP_INTEREST_RATE);
 
   return (
@@ -179,14 +185,27 @@ export function GameOverlay() {
               Shop
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Buy one upgrade, reroll the board, or bank leftover gold for{" "}
-              {Math.round(SHOP_INTEREST_RATE * 100)}% interest next wave.
-              Repeat buys cost ×1.5.
+              Buy one, freeze these three for next shop, or skip to bank{" "}
+              {Math.round(SHOP_INTEREST_RATE * 100)}% interest. Repeat buys cost
+              ×1.5.
             </p>
             <p className="mt-1 font-mono text-sm tabular-nums text-fg">
               {gold} gold · {hud.kills} kill{hud.kills === 1 ? "" : "s"}
               {interestPreview > 0 ? ` · bank +${interestPreview}` : ""}
+              {shopFrozen ? " · offers frozen" : ""}
             </p>
+            {pricedOut ? (
+              <p className="mt-2 text-sm text-emerald-300">
+                Priced out — skip heals {SHOP_PITY_HP} HP and grants +
+                {SHOP_PITY_GOLD}g next wave.
+              </p>
+            ) : null}
+            {(hud.lastPityHp ?? 0) > 0 || (hud.lastPityGold ?? 0) > 0 ? (
+              <p className="mt-1 text-xs text-muted">
+                Last consolation: +{hud.lastPityHp ?? 0} HP, +
+                {hud.lastPityGold ?? 0}g
+              </p>
+            ) : null}
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               {offers.map((offer) => (
                 <ShopCard
@@ -195,6 +214,8 @@ export function GameOverlay() {
                   gold={gold}
                   selected={picked === offer.id}
                   locked={Boolean(picked) && picked !== offer.id}
+                  grayed={pricedOut}
+                  frozen={shopFrozen}
                   onPick={() => pickShopOffer(offer.id)}
                 />
               ))}
@@ -216,15 +237,39 @@ export function GameOverlay() {
               </button>
               <button
                 type="button"
+                disabled={Boolean(picked)}
+                onClick={() => requestToggleFreeze()}
+                className={cn(
+                  "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl",
+                  "text-sm font-medium transition-transform duration-(--motion-quick)",
+                  picked
+                    ? "cursor-not-allowed border border-border bg-surface text-muted"
+                    : shopFrozen
+                      ? "border border-amber-300/50 bg-amber-300/15 text-fg hover:border-amber-200/60 active:scale-[0.98]"
+                      : "border border-border bg-surface text-fg hover:border-fg/30 active:scale-[0.98]",
+                )}
+              >
+                <Lock className="size-4" strokeWidth={2} />
+                {shopFrozen ? "Unfreeze offers" : "Freeze offers"}
+              </button>
+              <button
+                type="button"
                 onClick={() => requestNextWave()}
                 className={cn(
                   "inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl",
-                  "bg-fg text-sm font-medium text-bg transition-transform duration-(--motion-quick)",
+                  "text-sm font-medium transition-transform duration-(--motion-quick)",
                   "hover:opacity-95 active:scale-[0.98]",
+                  pricedOut ? "shop-next-pulse" : "bg-fg text-bg",
                 )}
               >
                 <Play className="size-4" strokeWidth={2} />
-                {picked ? "Next wave" : "Bank & next wave"}
+                {picked
+                  ? "Next wave"
+                  : pricedOut
+                    ? "Skip · pity + next"
+                    : shopFrozen
+                      ? "Hold & next wave"
+                      : "Bank & next wave"}
               </button>
             </div>
           </div>
@@ -239,18 +284,22 @@ function ShopCard({
   gold,
   selected,
   locked,
+  grayed,
+  frozen,
   onPick,
 }: {
   offer: ShopOffer;
   gold: number;
   selected: boolean;
   locked: boolean;
+  grayed: boolean;
+  frozen: boolean;
   onPick: () => void;
 }) {
   const Icon = shopIcon(offer.kind);
   const unaffordable = gold < offer.cost && !selected;
   const rarity: ShopRarity = offer.rarity ?? "common";
-  const legendary = rarity === "legendary" && !selected;
+  const legendary = rarity === "legendary" && !selected && !grayed;
   return (
     <button
       type="button"
@@ -260,12 +309,17 @@ function ShopCard({
         "flex min-h-[9.5rem] flex-col rounded-2xl border p-4 text-left transition-transform duration-(--motion-quick)",
         selected
           ? "border-blood bg-blood/15"
-          : legendary
-            ? "shop-legend bg-surface"
-            : rarity === "rare"
-              ? "border-sky-400/40 bg-surface hover:border-sky-300/50"
-              : "border-border bg-surface hover:border-fg/30",
-        locked || unaffordable ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
+          : grayed
+            ? "border-border bg-surface grayscale"
+            : legendary
+              ? "shop-legend bg-surface"
+              : rarity === "rare"
+                ? "border-sky-400/40 bg-surface hover:border-sky-300/50"
+                : "border-border bg-surface hover:border-fg/30",
+        locked || unaffordable || grayed
+          ? "cursor-not-allowed opacity-40"
+          : "active:scale-[0.99]",
+        frozen && !grayed ? "ring-1 ring-amber-300/40" : null,
       )}
     >
       <div className="flex items-start justify-between gap-2">
