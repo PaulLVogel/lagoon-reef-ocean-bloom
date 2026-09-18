@@ -22,6 +22,9 @@ export type HudSnap = {
   fever: boolean;
   combo: number;
   lastInterest: number;
+  shopFrozen: boolean;
+  lastPityHp: number;
+  lastPityGold: number;
 };
 
 type Bucket = {
@@ -34,6 +37,8 @@ type Bucket = {
   shopOffers: ShopOffer[];
   shopPicked: string | null;
   purchaseHistory: ShopKind[];
+  shopFrozen: boolean;
+  frozenKinds: ShopKind[];
   injected: Set<string> | null;
   stickX: number;
   stickY: number;
@@ -59,6 +64,9 @@ const emptyHud = (): HudSnap => ({
   fever: false,
   combo: 0,
   lastInterest: 0,
+  shopFrozen: false,
+  lastPityHp: 0,
+  lastPityGold: 0,
 });
 
 const fallback: Bucket = {
@@ -71,6 +79,8 @@ const fallback: Bucket = {
   shopOffers: [],
   shopPicked: null,
   purchaseHistory: [],
+  shopFrozen: false,
+  frozenKinds: [],
   injected: null,
   stickX: 0,
   stickY: 0,
@@ -92,6 +102,8 @@ export function runtime(): Bucket {
       shopOffers: [],
       shopPicked: null,
       purchaseHistory: [],
+      shopFrozen: false,
+      frozenKinds: [],
       injected: null,
       stickX: 0,
       stickY: 0,
@@ -100,6 +112,8 @@ export function runtime(): Bucket {
     };
   }
   if (!w.__vsRuntime.purchaseHistory) w.__vsRuntime.purchaseHistory = [];
+  if (!w.__vsRuntime.frozenKinds) w.__vsRuntime.frozenKinds = [];
+  if (typeof w.__vsRuntime.shopFrozen !== "boolean") w.__vsRuntime.shopFrozen = false;
   return w.__vsRuntime;
 }
 
@@ -131,6 +145,8 @@ export function requestRestart() {
   b.shopOffers = [];
   b.shopPicked = null;
   b.purchaseHistory = [];
+  b.shopFrozen = false;
+  b.frozenKinds = [];
   b.started = true;
   patchHud({
     playing: true,
@@ -147,6 +163,9 @@ export function requestRestart() {
     fever: false,
     combo: 0,
     lastInterest: 0,
+    shopFrozen: false,
+    lastPityHp: 0,
+    lastPityGold: 0,
   });
 }
 
@@ -167,16 +186,35 @@ export function pickShopOffer(id: string) {
   b.shopPicked = id;
   b.pendingUpgrade = offer.kind;
   b.purchaseHistory = [...b.purchaseHistory, offer.kind];
-  patchHud({ shopPicked: id, gold: b.snap.gold - offer.cost });
+  b.shopFrozen = false;
+  b.frozenKinds = [];
+  patchHud({ shopPicked: id, gold: b.snap.gold - offer.cost, shopFrozen: false });
 }
 
 export function requestReroll() {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
   if (b.shopPicked) return;
+  if (b.shopFrozen) return;
   if (b.snap.gold < SHOP_REROLL_COST) return;
   patchHud({ gold: b.snap.gold - SHOP_REROLL_COST });
   b.rerollRequested = true;
+}
+
+export function requestToggleFreeze() {
+  const b = runtime();
+  if (!b.snap.waveClear || b.snap.dead) return;
+  if (b.shopPicked) return;
+  if (b.shopFrozen) {
+    b.shopFrozen = false;
+    b.frozenKinds = [];
+    patchHud({ shopFrozen: false });
+    return;
+  }
+  if (!b.shopOffers.length) return;
+  b.shopFrozen = true;
+  b.frozenKinds = b.shopOffers.map((o) => o.kind);
+  patchHud({ shopFrozen: true });
 }
 
 export function requestNextWave() {
