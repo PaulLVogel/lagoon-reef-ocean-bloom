@@ -44,6 +44,7 @@ export const SEGMENT_VACUUM_SPEED = 260;
 export const COMBO_WINDOW_MS = 2000;
 export const COMBO_TRIGGER = 10;
 export const PICKUP_FLOAT_MS = 500;
+export const GOLD_TALLY_MS = 300;
 
 export const COLOR = {
   arena: 0x0c0e12,
