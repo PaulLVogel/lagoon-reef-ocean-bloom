@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **HUD gold hook** on `main` (300ms tally tween, nextWaveBank for late gems in shop, credit-card overdraft, lifetime totalGoldEarned on death).
+Last shipped: **per-segment independent targeting** on `main` (each trailing segment is its own party member; shots ignore head aim/location).
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping. Copy both into:
 
@@ -37,6 +37,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 
 ## 3. Strict Technical Rules (AI Directives)
 *   **Segment Movement:** Segments MUST NOT use Arcade Physics velocity, `moveToObject`, or pathfinding to follow the head. They must strictly follow the head using a `positionHistory` array updated every frame. Segment N is N×`HISTORY_STRIDE` frames behind the head (`HISTORY_STRIDE = 7`). Append history **only while moving**.
+*   **Segment weapons:** Every trailing segment holds its own `Weapon` (`type`, `fireRate`, `lastFired`). Targeting and firing use **that segment's (x, y)** only. Ignore head position and head facing. Do not retarget from the head.
 *   **Modularity:** `SnakePlayer.ts` for player/segment/weapon logic, `MainScene.ts` for enemy spawns, collisions, gems, and wave/death/shop apply.
 *   **HUD:** `runtime.ts` → `window.__vsRuntime`. Do not introduce zustand for game state.
 *   **Assets:** Phaser geometric shapes only unless PNGs are requested.
@@ -49,7 +50,7 @@ A browser-based arena survival game combining *Vampire Survivors* (auto-firing w
 Vite + Phaser canvas. `SnakePlayer`. WASD 8-way head. `positionHistory` trail.
 
 ### [x] Phase 2: Weapons
-`Weapon` interface. Seg 0 blaster / 1 turret / 2 blades. Shots originate at that segment.
+`Weapon` interface. Every trailing segment is an independent party member (cycle blaster / turret / blade). Each scans alive enemies from **its own (x, y)** and fires from that point toward its unique nearest target. Head aim/location is ignored. `positionHistory` trail is unchanged.
 
 ### [x] Phase 3: Enemy Swarm
 `Enemy` class. Spawn outside camera. Chase head. Contact vs head or any segment. Death overlay + Restart (`scene.restart()`).

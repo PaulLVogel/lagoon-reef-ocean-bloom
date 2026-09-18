@@ -15,7 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/`.
 
-Last shipped: **HUD gold hook** on `main` (tally tween, nextWaveBank, credit-card overdraft, lifetime wealth).
+Last shipped: **per-segment independent targeting** on `main` (each trailing segment is its own party member; shots ignore head aim/location).
 
 ## Rules
 - Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail.
@@ -29,8 +29,8 @@ Last shipped: **HUD gold hook** on `main` (tally tween, nextWaveBank, credit-car
 ## File map
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, segments, weapons, trail, `heal()`, pickup ring, `boostPickupRadius()`, `enableSegmentVacuum()` |
-| `src/game/Weapon.ts` | `Weapon` / `FireEvent` / default loadout |
+| `src/game/SnakePlayer.ts` | head, segments, trail, per-segment weapons + independent target/fire, `heal()`, pickup ring, `boostPickupRadius()`, `enableSegmentVacuum()` |
+| `src/game/Weapon.ts` | `Weapon` / `FireEvent` / `EnemyScan` / `makeWeapon` / `defaultLoadout` |
 | `src/game/MainScene.ts` | spawn, collisions, HP, wave timer, death, shop apply, next wave, `spawnFromKill`, collect+Fever+blip |
 | `src/game/Gems.ts` | gem/health/magnet pool, pop scatter, magnetize, vacuum, `collectHead` |
 | `src/game/shop.ts` | catalog + rarity + `scaledOfferCost` + `rollShopOffers` + `offersFromKinds` + `canAffordAny` + `bankInterest` + pity constants |
@@ -41,11 +41,13 @@ Last shipped: **HUD gold hook** on `main` (tally tween, nextWaveBank, credit-car
 | `src/components/game-overlay.tsx` | start / HUD clock / gold / fever / death / shop |
 
 ## Phase 2 weapons
-| Segment | Type | Behavior |
+Every trailing segment holds its own `Weapon` (`type`, `fireRate`, `lastFired`, `segmentIndex`). Targeting uses **that segment's (x, y)** only — never head position or head facing. `positionHistory` trail is unchanged.
+
+| Cycle | Type | Behavior |
 |---|---|---|
-| 0 | blaster | fires along facing, 280ms, 6 dmg |
-| 1 | turret | aims nearest enemy, 420ms, 8 dmg |
-| 2 | blade | two orbiting rects, 160ms CD, 5 dmg |
+| 0, 3, … | blaster | nearest enemy to this segment, 280ms, 6 dmg, shot from segment xy |
+| 1, 4, … | turret | nearest enemy to this segment, 420ms, 8 dmg, shot from segment xy |
+| 2, 5, … | blade | two rects orbit **this** segment, 160ms CD, 5 dmg |
 
 ## Phase 6 — economy + drop hook + collect hook
 Kill → `MainScene.applyEnemyHit` → `gems.spawnFromKill(x, y, enemy.maxHp)`.

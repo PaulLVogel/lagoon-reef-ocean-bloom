@@ -10,9 +10,20 @@ import {
   SEGMENT_RADIUS,
   WORLD_SIZE,
 } from "./constants";
-import { defaultLoadout, type AimPoint, type FireEvent, type Weapon } from "./Weapon";
+import {
+  defaultLoadout,
+  makeWeapon,
+  type EnemyScan,
+  type FireEvent,
+  type Weapon,
+} from "./Weapon";
 
 type HistoryPoint = { x: number; y: number };
+
+type BladePair = {
+  segmentIndex: number;
+  blades: Phaser.GameObjects.Rectangle[];
+};
 
 const BLADE_ORBIT = 34;
 const BLADE_RADIUS = 11;
@@ -23,7 +34,7 @@ export class SnakePlayer {
   readonly head: Phaser.GameObjects.Container;
   readonly segments: Phaser.GameObjects.Container[] = [];
   readonly positionHistory: HistoryPoint[] = [];
-  readonly weapons: Weapon[];
+  readonly weapons: Weapon[] = [];
 
   speed = BASE_SPEED;
   facing = 0;
@@ -37,7 +48,7 @@ export class SnakePlayer {
   private readonly headGlow: Phaser.GameObjects.Arc;
   private readonly pickupRing: Phaser.GameObjects.Arc;
   private readonly snout: Phaser.GameObjects.Triangle;
-  private readonly blades: Phaser.GameObjects.Rectangle[] = [];
+  private readonly bladePairs: BladePair[] = [];
   private bladeAngle = 0;
   private readonly fire: (ev: FireEvent) => void;
 
@@ -51,7 +62,6 @@ export class SnakePlayer {
     this.scene = scene;
     this.historyStride = HISTORY_STRIDE;
     this.fire = fire;
-    this.weapons = defaultLoadout();
 
     this.head = scene.add.container(x, y);
     this.head.setDepth(20);
@@ -84,11 +94,12 @@ export class SnakePlayer {
       });
     }
 
+    const loadout = defaultLoadout(segmentCount);
     for (let i = 0; i < segmentCount; i++) {
       this.spawnSegment();
+      this.armSegment(i, loadout[i]!.type);
     }
     this.layoutSegments();
-    this.attachMounts();
   }
 
   get x() {
@@ -133,16 +144,7 @@ export class SnakePlayer {
 
   addArmedSegment(type: Weapon["type"]) {
     this.addSegment();
-    const segmentIndex = this.segments.length - 1;
-    const proto = defaultLoadout().find((w) => w.type === type);
-    this.weapons.push({
-      type,
-      segmentIndex,
-      fireRate: proto?.fireRate ?? 280,
-      lastFired: 0,
-      damage: proto?.damage ?? 6,
-    });
-    this.attachMount(segmentIndex, type);
+    this.armSegment(this.segments.length - 1, type);
   }
 
   boostFireRate(type: Weapon["type"], mul: number, floor = 140) {
@@ -174,7 +176,7 @@ export class SnakePlayer {
     return amount;
   }
 
-  update(dt: number, ax: number, ay: number, now: number, aim: AimPoint | null, combatOn: boolean) {
+  update(dt: number, ax: number, ay: number, now: number, enemies: EnemyScan[], combatOn: boolean) {
     const moving = ax !== 0 || ay !== 0;
     if (moving) {
       this.facing = Math.atan2(ay, ax);
@@ -204,36 +206,40 @@ export class SnakePlayer {
 
     this.layoutSegments();
     this.updateBlades(dt);
-    if (combatOn) this.tickWeapons(now, aim);
+    if (combatOn) this.tickWeapons(now, enemies);
   }
 
-  bladeHits(
-    dummyX: number,
-    dummyY: number,
-    dummyR: number,
-    now: number,
-  ): number {
-    const weapon = this.weapons.find((w) => w.type === "blade");
-    if (!weapon || now - weapon.lastFired < weapon.fireRate) return 0;
-    for (const blade of this.blades) {
-      const dx = blade.x - dummyX;
-      const dy = blade.y - dummyY;
-      const need = BLADE_RADIUS + dummyR;
-      if (dx * dx + dy * dy <= need * need) {
-        weapon.lastFired = now;
-        return weapon.damage;
+  bladeHits(dummyX: number, dummyY: number, dummyR: number, now: number): number {
+    let dealt = 0;
+    for (const w of this.weapons) {
+      if (w.type !== "blade") continue;
+      if (now - w.lastFired < w.fireRate) continue;
+      const pair = this.bladePairs.find((p) => p.segmentIndex === w.segmentIndex);
+      if (!pair) continue;
+      for (const blade of pair.blades) {
+        const dx = blade.x - dummyX;
+        const dy = blade.y - dummyY;
+        const need = BLADE_RADIUS + dummyR;
+        if (dx * dx + dy * dy <= need * need) {
+          w.lastFired = now;
+          dealt += w.damage;
+          break;
+        }
       }
     }
-    return 0;
+    return dealt;
   }
 
   destroy() {
     this.head.destroy(true);
     for (const seg of this.segments) seg.destroy(true);
-    for (const b of this.blades) b.destroy();
+    for (const pair of this.bladePairs) {
+      for (const b of pair.blades) b.destroy();
+    }
     this.segments.length = 0;
     this.positionHistory.length = 0;
-    this.blades.length = 0;
+    this.bladePairs.length = 0;
+    this.weapons.length = 0;
   }
 
   private spawnSegment() {
@@ -249,10 +255,11 @@ export class SnakePlayer {
     this.segments.push(container);
   }
 
-  private attachMounts() {
-    this.attachMount(0, "blaster");
-    this.attachMount(1, "turret");
-    this.attachMount(2, "blade");
+  private armSegment(index: number, type: Weapon["type"]) {
+    const existing = this.weapons.find((w) => w.segmentIndex === index);
+    if (existing) return;
+    this.weapons.push(makeWeapon(type, index));
+    this.attachMount(index, type);
   }
 
   private attachMount(index: number, type: Weapon["type"]) {
@@ -269,55 +276,66 @@ export class SnakePlayer {
       const b = this.scene.add.rectangle(0, 0, 18, 6, COLOR.blade);
       a.setDepth(19);
       b.setDepth(19);
-      this.blades.push(a, b);
+      this.bladePairs.push({ segmentIndex: index, blades: [a, b] });
     }
   }
 
   private updateBlades(dt: number) {
-    const host = this.segments[2];
-    if (!host || this.blades.length < 2) return;
     this.bladeAngle += dt * 4.2;
-    this.blades.forEach((blade, i) => {
-      const ang = this.bladeAngle + i * Math.PI;
-      blade.setPosition(host.x + Math.cos(ang) * BLADE_ORBIT, host.y + Math.sin(ang) * BLADE_ORBIT);
-      blade.setRotation(ang + Math.PI / 2);
-    });
+    for (const pair of this.bladePairs) {
+      const host = this.segments[pair.segmentIndex];
+      if (!host) continue;
+      pair.blades.forEach((blade, i) => {
+        const ang = this.bladeAngle + i * Math.PI;
+        blade.setPosition(host.x + Math.cos(ang) * BLADE_ORBIT, host.y + Math.sin(ang) * BLADE_ORBIT);
+        blade.setRotation(ang + Math.PI / 2);
+      });
+    }
   }
 
-  private tickWeapons(now: number, aim: AimPoint | null) {
+  private nearestEnemyTo(x: number, y: number, enemies: EnemyScan[]): EnemyScan | null {
+    let best: EnemyScan | null = null;
+    let bestD = Infinity;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const dx = e.x - x;
+      const dy = e.y - y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  private tickWeapons(now: number, enemies: EnemyScan[]) {
     for (const w of this.weapons) {
       if (w.type === "blade") continue;
       const seg = this.segments[w.segmentIndex];
       if (!seg) continue;
       if (now - w.lastFired < w.fireRate) continue;
 
-      if (w.type === "blaster") {
-        const ang = seg.rotation;
-        this.fire({
-          x: seg.x + Math.cos(ang) * 16,
-          y: seg.y + Math.sin(ang) * 16,
-          vx: Math.cos(ang) * BLASTER_SPEED,
-          vy: Math.sin(ang) * BLASTER_SPEED,
-          damage: w.damage,
-          color: COLOR.blaster,
-          radius: 4,
-        });
-        w.lastFired = now;
-      } else if (w.type === "turret" && aim) {
-        const dx = aim.x - seg.x;
-        const dy = aim.y - seg.y;
-        const mag = Math.hypot(dx, dy) || 1;
-        this.fire({
-          x: seg.x + (dx / mag) * 14,
-          y: seg.y + (dy / mag) * 14,
-          vx: (dx / mag) * TURRET_SPEED,
-          vy: (dy / mag) * TURRET_SPEED,
-          damage: w.damage,
-          color: COLOR.turret,
-          radius: 5,
-        });
-        w.lastFired = now;
-      }
+      const target = this.nearestEnemyTo(seg.x, seg.y, enemies);
+      if (!target) continue;
+
+      const dx = target.x - seg.x;
+      const dy = target.y - seg.y;
+      const mag = Math.hypot(dx, dy) || 1;
+      const ux = dx / mag;
+      const uy = dy / mag;
+      const speed = w.type === "turret" ? TURRET_SPEED : BLASTER_SPEED;
+
+      this.fire({
+        x: seg.x + ux * 16,
+        y: seg.y + uy * 16,
+        vx: ux * speed,
+        vy: uy * speed,
+        damage: w.damage,
+        color: w.type === "turret" ? COLOR.turret : COLOR.blaster,
+        radius: w.type === "turret" ? 5 : 4,
+      });
+      w.lastFired = now;
     }
   }
 

@@ -6,6 +6,7 @@ import {
   ENEMY_CONTACT_DAMAGE,
   ENEMY_HP,
   ENEMY_RADIUS,
+  GOLD_TALLY_MS,
   HUD_TICK_MS,
   MAX_ENEMIES,
   PICKUP_FLOAT_MS,
@@ -43,6 +44,9 @@ export class MainScene extends Phaser.Scene {
   private iFrameUntil = 0;
   private kills = 0;
   private gold = 0;
+  private goldDisplay = 0;
+  private nextWaveBank = 0;
+  private totalGoldEarned = 0;
   private dead = false;
   private waveClear = false;
   private wave = 1;
@@ -65,6 +69,9 @@ export class MainScene extends Phaser.Scene {
     this.iFrameUntil = 0;
     this.kills = 0;
     this.gold = 0;
+    this.goldDisplay = 0;
+    this.nextWaveBank = 0;
+    this.totalGoldEarned = 0;
     this.dead = false;
     this.waveClear = false;
     this.wave = 1;
@@ -97,6 +104,9 @@ export class MainScene extends Phaser.Scene {
       maxHp: 100,
       kills: 0,
       gold: 0,
+      goldDisplay: 0,
+      totalGoldEarned: 0,
+      nextWaveBank: 0,
       swarm: 0,
       dead: false,
       waveClear: false,
@@ -119,12 +129,18 @@ export class MainScene extends Phaser.Scene {
         if (bucket.pendingUpgrade) {
           const kind = bucket.pendingUpgrade;
           bucket.pendingUpgrade = null;
+          const from = bucket.goldTallyFrom ?? this.gold;
           this.gold = bucket.snap.gold;
+          bucket.goldTallyFrom = null;
+          this.tallyGoldDisplay(from, this.gold);
           this.applyUpgrade(kind);
         }
         if (bucket.rerollRequested) {
           bucket.rerollRequested = false;
+          const from = bucket.goldTallyFrom ?? this.gold;
           this.gold = bucket.snap.gold;
+          bucket.goldTallyFrom = null;
+          this.tallyGoldDisplay(from, this.gold);
           this.rollShop();
         }
         if (bucket.nextWaveRequested) {
@@ -133,13 +149,16 @@ export class MainScene extends Phaser.Scene {
         }
       }
       if (this.dead) return;
+      if (this.waveClear) {
+        const shopDt = Math.min(delta, 50) / 1000;
+        this.collectLoot(shopDt, time);
+      }
     }
 
     const dt = Math.min(delta, 50) / 1000;
     const move = sampleMove();
     const combatOn = isGameStarted() && !this.waveClear && !this.dead;
-    const aim = this.nearestEnemy();
-    this.player.update(dt, move.x, move.y, time, aim, combatOn);
+    this.player.update(dt, move.x, move.y, time, this.enemies, combatOn);
 
     if (combatOn) {
       this.waveMs = Math.max(0, this.waveMs - delta);
@@ -181,7 +200,12 @@ export class MainScene extends Phaser.Scene {
           waveClear: this.waveClear,
           wave: this.wave,
         };
-        if (!this.waveClear) hud.gold = this.gold;
+        if (!this.waveClear) {
+          hud.gold = this.gold;
+          hud.goldDisplay = this.goldDisplay;
+        }
+        hud.totalGoldEarned = this.totalGoldEarned;
+        hud.nextWaveBank = this.nextWaveBank;
         hud.fever = time < this.feverUntil;
         hud.combo = this.gemTimes.length;
         patchHud(hud);
@@ -200,7 +224,12 @@ export class MainScene extends Phaser.Scene {
     for (const e of this.enemies) e.destroy();
     this.enemies = [];
     this.shots.clear();
-    this.gold += this.gems.vacuum();
+    const vacuumed = this.gems.vacuum();
+    if (vacuumed > 0) {
+      this.gold += vacuumed;
+      this.totalGoldEarned += vacuumed;
+    }
+    this.goldDisplay = this.gold;
     this.gemTimes = [];
     this.feverUntil = 0;
     const bucket = runtime();
@@ -220,6 +249,9 @@ export class MainScene extends Phaser.Scene {
       hp: this.playerHp,
       kills: this.kills,
       gold: this.gold,
+      goldDisplay: this.goldDisplay,
+      totalGoldEarned: this.totalGoldEarned,
+      nextWaveBank: this.nextWaveBank,
       fever: false,
       combo: 0,
       lastInterest: 0,
@@ -260,13 +292,19 @@ export class MainScene extends Phaser.Scene {
     this.waveClear = false;
     this.spawnAcc = 0;
     this.gold = bucket.snap.gold;
+    if (this.nextWaveBank > 0) {
+      this.gold += this.nextWaveBank;
+      this.nextWaveBank = 0;
+    }
     const interest = bankInterest(this.gold);
     this.gold += interest;
+    if (interest > 0) this.totalGoldEarned += interest;
     let pityHp = 0;
     let pityGold = 0;
     if (pricedOut) {
       pityGold = SHOP_PITY_GOLD;
       this.gold += pityGold;
+      this.totalGoldEarned += pityGold;
       const nextHp = Math.min(100, this.playerHp + SHOP_PITY_HP);
       pityHp = nextHp - this.playerHp;
       this.playerHp = nextHp;
@@ -290,6 +328,9 @@ export class MainScene extends Phaser.Scene {
       hp: this.playerHp,
       kills: this.kills,
       gold: this.gold,
+      goldDisplay: this.gold,
+      totalGoldEarned: this.totalGoldEarned,
+      nextWaveBank: 0,
       speed: Math.round(this.player.speed),
       fever: false,
       combo: 0,
@@ -320,6 +361,10 @@ export class MainScene extends Phaser.Scene {
       this.player.boostPickupRadius();
     } else if (kind === "segment_vacuum") {
       this.player.enableSegmentVacuum();
+    } else if (kind === "credit_card") {
+      this.player.addArmedSegment("blaster");
+      this.player.addArmedSegment("blaster");
+      this.player.boostSpeed(1.18);
     }
     patchHud({
       segments: this.player.segments.length,
@@ -331,20 +376,6 @@ export class MainScene extends Phaser.Scene {
 
   private livingCount() {
     return this.enemies.filter((e) => e.alive).length;
-  }
-
-  private nearestEnemy() {
-    let best: Enemy | null = null;
-    let bestD = Infinity;
-    for (const e of this.enemies) {
-      if (!e.alive) continue;
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y);
-      if (d < bestD) {
-        bestD = d;
-        best = e;
-      }
-    }
-    return best ? { x: best.x, y: best.y } : null;
   }
 
   private spawnEnemyOutsideView() {
@@ -437,6 +468,27 @@ export class MainScene extends Phaser.Scene {
       dead: true,
       waveClear: false,
       gold: this.gold,
+      goldDisplay: this.gold,
+      totalGoldEarned: this.totalGoldEarned,
+      nextWaveBank: this.nextWaveBank,
+    });
+  }
+
+  private tallyGoldDisplay(from: number, to: number) {
+    this.goldDisplay = from;
+    patchHud({ goldDisplay: Math.round(from) });
+    this.tweens.add({
+      targets: this,
+      goldDisplay: to,
+      duration: GOLD_TALLY_MS,
+      ease: "Cubic.easeOut",
+      onUpdate: () => {
+        patchHud({ goldDisplay: Math.round(this.goldDisplay) });
+      },
+      onComplete: () => {
+        this.goldDisplay = to;
+        patchHud({ goldDisplay: to });
+      },
     });
   }
 
@@ -463,7 +515,13 @@ export class MainScene extends Phaser.Scene {
           this.feverUntil = now + COMBO_WINDOW_MS;
         }
         const value = alreadyFever ? ev.gold * 2 : ev.gold;
-        this.gold += value;
+        this.totalGoldEarned += value;
+        if (this.waveClear) {
+          this.nextWaveBank += value;
+        } else {
+          this.gold += value;
+          this.goldDisplay = this.gold;
+        }
         this.floatPickup(ev.x, ev.y, `+${value}`, alreadyFever);
         this.playBlip(alreadyFever);
       } else if (ev.kind === "health") {

@@ -8,15 +8,12 @@ export interface Weapon {
   damage: number;
 }
 
-export function defaultLoadout(): Weapon[] {
-  return [
-    { type: "blaster", segmentIndex: 0, fireRate: 280, lastFired: 0, damage: 6 },
-    { type: "turret", segmentIndex: 1, fireRate: 420, lastFired: 0, damage: 8 },
-    { type: "blade", segmentIndex: 2, fireRate: 160, lastFired: 0, damage: 5 },
-  ];
-}
-
-export type AimPoint = { x: number; y: number };
+/** Alive-enemy snapshot used for per-segment targeting. Not the head. */
+export type EnemyScan = {
+  x: number;
+  y: number;
+  alive: boolean;
+};
 
 export type FireEvent = {
   x: number;
@@ -27,3 +24,27 @@ export type FireEvent = {
   color: number;
   radius: number;
 };
+
+const PROTOS: Record<WeaponType, { fireRate: number; damage: number }> = {
+  blaster: { fireRate: 280, damage: 6 },
+  turret: { fireRate: 420, damage: 8 },
+  blade: { fireRate: 160, damage: 5 },
+};
+
+const CYCLE: WeaponType[] = ["blaster", "turret", "blade"];
+
+export function makeWeapon(type: WeaponType, segmentIndex: number): Weapon {
+  const proto = PROTOS[type];
+  return {
+    type,
+    segmentIndex,
+    fireRate: proto.fireRate,
+    lastFired: 0,
+    damage: proto.damage,
+  };
+}
+
+/** One independent weapon per trailing segment. Cycles blaster / turret / blade. */
+export function defaultLoadout(segmentCount: number): Weapon[] {
+  return Array.from({ length: segmentCount }, (_, i) => makeWeapon(CYCLE[i % CYCLE.length]!, i));
+}
