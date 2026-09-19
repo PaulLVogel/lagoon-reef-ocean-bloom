@@ -136,7 +136,7 @@ export function GameOverlay() {
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">02</span>
-                Green / blue / red gems, health, magnet — head only
+                Gold coins, red potion, magnet — head only
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">03</span>

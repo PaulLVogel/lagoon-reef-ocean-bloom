@@ -1,20 +1,27 @@
 import * as Phaser from "phaser";
 import {
+  COIN_ANIM,
+  COIN_ANIM_FPS,
+  COIN_FRAMES,
+  COIN_SCALE_T1,
+  COIN_SCALE_T2,
+  COIN_SCALE_T3,
+  COIN_SHEET,
   COLOR,
   GEM_BLUE_VALUE,
   GEM_DRAG,
   GEM_GREEN_VALUE,
   GEM_POOL,
   GEM_POP,
-  GEM_RADIUS,
   GEM_RED_VALUE,
   HEALTH_DROP_CHANCE,
   HEALTH_HEAL,
-  HEALTH_SIZE,
   MAGNET_DROP_CHANCE,
   MAGNET_SIZE,
   MAGNET_SPEED,
   PICKUP_RADIUS_BASE,
+  POTION_KEY,
+  POTION_SCALE,
   SEGMENT_VACUUM_RADIUS,
   SEGMENT_VACUUM_SPEED,
 } from "./constants";
@@ -23,22 +30,20 @@ type Kind = "gem" | "health" | "magnet";
 
 type GemTier = {
   value: number;
-  color: number;
   scale: number;
   minHp: number;
-  points: number;
 };
 
 const TIERS: GemTier[] = [
-  { value: GEM_GREEN_VALUE, color: COLOR.gemGreen, scale: 1, minHp: 0, points: 4 },
-  { value: GEM_BLUE_VALUE, color: COLOR.gemBlue, scale: 1.12, minHp: 30, points: 5 },
-  { value: GEM_RED_VALUE, color: COLOR.gemRed, scale: 1.28, minHp: 40, points: 6 },
+  { value: GEM_GREEN_VALUE, scale: COIN_SCALE_T1, minHp: 0 },
+  { value: GEM_BLUE_VALUE, scale: COIN_SCALE_T2, minHp: 30 },
+  { value: GEM_RED_VALUE, scale: COIN_SCALE_T3, minHp: 40 },
 ];
 
 type Slot = {
   root: Phaser.GameObjects.Container;
-  gem: Phaser.GameObjects.Star;
-  health: Phaser.GameObjects.Rectangle;
+  gem: Phaser.GameObjects.Sprite;
+  health: Phaser.GameObjects.Sprite;
   magnet: Phaser.GameObjects.Rectangle;
   kind: Kind;
   value: number;
@@ -46,6 +51,7 @@ type Slot = {
   vx: number;
   vy: number;
   magnetized: boolean;
+  bob: number;
 };
 
 function tierFromHp(hp: number): GemTier {
@@ -81,16 +87,37 @@ export class Gems {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+
+    const coinTex = scene.textures.get(COIN_SHEET);
+    if (coinTex && coinTex.key !== "__MISSING") {
+      coinTex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+    const potionTex = scene.textures.get(POTION_KEY);
+    if (potionTex && potionTex.key !== "__MISSING") {
+      potionTex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+
+    if (!scene.anims.exists(COIN_ANIM)) {
+      scene.anims.create({
+        key: COIN_ANIM,
+        frames: scene.anims.generateFrameNumbers(COIN_SHEET, { start: 0, end: COIN_FRAMES - 1 }),
+        frameRate: COIN_ANIM_FPS,
+        repeat: -1,
+      });
+    }
+
     for (let i = 0; i < GEM_POOL; i++) {
       const root = scene.add.container(0, 0);
       root.setVisible(false);
       root.setActive(false);
       root.setDepth(12);
 
-      const gem = scene.add.star(0, 0, 4, GEM_RADIUS + 3, GEM_RADIUS - 1, COLOR.gemGreen);
-      gem.setStrokeStyle(2, 0xffffff, 0.95);
-      const health = scene.add.rectangle(0, 0, HEALTH_SIZE, HEALTH_SIZE, COLOR.health);
-      health.setStrokeStyle(2, 0xffffff, 0.85);
+      const gem = scene.add.sprite(0, 0, COIN_SHEET, 0);
+      gem.setOrigin(0.5, 0.5);
+      gem.setVisible(false);
+      const health = scene.add.sprite(0, 0, POTION_KEY);
+      health.setOrigin(0.5, 0.5);
+      health.setScale(POTION_SCALE);
       health.setVisible(false);
       const magnet = scene.add.rectangle(0, 0, MAGNET_SIZE, MAGNET_SIZE, COLOR.magnet);
       magnet.setStrokeStyle(2, 0xffffff, 0.9);
@@ -109,6 +136,7 @@ export class Gems {
         vx: 0,
         vy: 0,
         magnetized: false,
+        bob: Math.random() * Math.PI * 2,
       });
     }
   }
@@ -140,7 +168,10 @@ export class Gems {
     for (const s of this.slots) {
       if (!s.live) continue;
       this.stepPhysics(s, hx, hy, dt, segs, vacR2);
-      if (s.kind === "gem") s.gem.rotation += dt * 2.4;
+      if (s.kind === "health") {
+        s.bob += dt * 3.2;
+        s.health.y = Math.sin(s.bob) * 2.4;
+      }
 
       const dx = hx - s.root.x;
       const dy = hy - s.root.y;
@@ -196,12 +227,14 @@ export class Gems {
     const slot = this.takeSlot();
     slot.kind = "gem";
     slot.value = tier.value;
-    slot.gem.setFillStyle(tier.color, 1);
-    slot.gem.setStrokeStyle(2, 0xffffff, 1);
     slot.gem.setScale(tier.scale);
     slot.gem.setVisible(true);
     slot.health.setVisible(false);
     slot.magnet.setVisible(false);
+    slot.health.y = 0;
+    const start = Phaser.Math.Between(0, COIN_FRAMES - 1);
+    slot.gem.anims.play({ key: COIN_ANIM, startFrame: start }, true);
+    slot.gem.anims.timeScale = 0.85 + Math.random() * 0.45;
     this.popIn(slot, x, y);
   }
 
@@ -210,7 +243,10 @@ export class Gems {
     slot.kind = "health";
     slot.value = 0;
     slot.gem.setVisible(false);
+    slot.gem.anims.stop();
     slot.health.setVisible(true);
+    slot.health.setScale(POTION_SCALE);
+    slot.health.y = 0;
     slot.magnet.setVisible(false);
     this.popIn(slot, x, y);
   }
@@ -220,7 +256,9 @@ export class Gems {
     slot.kind = "magnet";
     slot.value = 0;
     slot.gem.setVisible(false);
+    slot.gem.anims.stop();
     slot.health.setVisible(false);
+    slot.health.y = 0;
     slot.magnet.setVisible(true);
     this.popIn(slot, x, y);
   }
@@ -293,6 +331,8 @@ export class Gems {
     s.magnetized = false;
     s.vx = 0;
     s.vy = 0;
+    s.gem.anims.stop();
+    s.health.y = 0;
     s.root.setVisible(false);
     s.root.setActive(false);
   }

@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **halfling bard as the snake head** (16×16 × 4 walk, nearest-neighbor ×4, `BARD_SCALE = 4`) on top of the weapon-pool overhaul (`main`).
+Last shipped: **coin + potion pickup sprites** — XP drops are spinning gold coins; HP drop is the red potion sprite. Magnet unchanged.
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -169,5 +169,5 @@ These shipped on `main` `ef12c07`. Treat as current truth.
 Owned on `SnakePlayer`: `headMaxHp`, `segmentMaxHp`, `speed`, `cooldownMul`, `damageMul`, `pickupBonus`, `armor`, `areaOfEffect`. Armor is flat reduction (`mitigate`, min 1) on head and segment hits.
 
 ### Gems
-Star polygons (`scene.add.star`) in cyan / yellow / magenta with white stroke. Still head-only collect.
+Gold coin sprites (`public/sprites/coin-gold.png`, 8-frame spin). Larger coins for 5g / 10g. Head-only collect. HP drop is the red flask (`public/sprites/potion-red.png`).
 

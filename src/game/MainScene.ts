@@ -4,7 +4,7 @@ import {
   ERA_BOSS_DMG_MUL, ERA_BOSS_HP_MUL, ERA_HORDE_MUL, ERA_SPAWN_MUL,
   GOLD_TALLY_MS, HUD_TICK_MS, MAX_ENEMIES, MOBILE_WIDTH, MOBILE_ZOOM, PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS, PLAYER_MAX_HP, SEGMENT_RADIUS, SPAWN_INTERVAL_MIN_MS, SPAWN_INTERVAL_MS,
-  TILE, BARD_FRAME_SIZE, BARD_SHEET, WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
+  TILE, BARD_FRAME_SIZE, BARD_SHEET, COIN_FRAME_SIZE, COIN_SHEET, POTION_KEY, WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
 } from "./constants";
 import { ENEMY_BASE, ENEMY_HP_BASE, Enemy, type HordeKind, type EnemySpec } from "./Enemy";
 import { Gems } from "./Gems";
@@ -66,6 +66,10 @@ export class MainScene extends Phaser.Scene {
     this.load.spritesheet(BARD_SHEET, "/sprites/halfling-bard.png", {
       frameWidth: BARD_FRAME_SIZE, frameHeight: BARD_FRAME_SIZE,
     });
+    this.load.spritesheet(COIN_SHEET, "/sprites/coin-gold.png", {
+      frameWidth: COIN_FRAME_SIZE, frameHeight: COIN_FRAME_SIZE,
+    });
+    this.load.image(POTION_KEY, "/sprites/potion-red.png");
   }
 
   init() {

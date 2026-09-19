@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **boss-loop reset + dynamic horde unlocks** — living-boss check on `wave % 10 === 0` so waves 20/30 still spawn. Pool: flanker from wave 1, armored brute 5, charger 11, siege 15. Era multipliers apply to every horde kind.
+Last shipped: **coin + potion pickup sprites** — XP drops are spinning gold coins; HP drop is the red potion sprite. Magnet unchanged.
 
 ### 0.1 GitHub merge / push rules (do not skip)
 

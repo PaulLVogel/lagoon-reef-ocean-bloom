@@ -22,6 +22,20 @@ export const BARD_FRAME_SIZE = 16;
 /** Integer nearest-neighbor scale (16×4 = 64px). Hitbox stays HEAD_RADIUS. */
 export const BARD_SCALE = 4;
 
+/** Gold coin XP drop: 8-frame 16×16 spin from Coin Sheet.png (top row). */
+export const COIN_SHEET = "vs-coin";
+export const COIN_FRAME_SIZE = 16;
+export const COIN_FRAMES = 8;
+export const COIN_ANIM = "vs-coin-spin";
+export const COIN_ANIM_FPS = 12;
+export const COIN_SCALE_T1 = 1.7;
+export const COIN_SCALE_T2 = 2.15;
+export const COIN_SCALE_T3 = 2.55;
+
+/** Red flask HP drop from Potions.png (top-left 16×16). */
+export const POTION_KEY = "vs-potion";
+export const POTION_SCALE = 2.2;
+
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
 export const BULLET_POOL = 96;
