@@ -38,6 +38,10 @@
     color: var(--color-fg);
     overflow: hidden;
   }
+
+  .overscroll-contain {
+    touch-action: pan-y;
+  }
 }
 
 .shop-legend {

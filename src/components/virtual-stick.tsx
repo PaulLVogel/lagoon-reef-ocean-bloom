@@ -55,7 +55,7 @@ export function VirtualStick({ className }: Props) {
     <div
       ref={rootRef}
       className={cn(
-        "relative size-[120px] touch-none select-none rounded-full border border-border bg-surface/70",
+        "relative size-[132px] touch-none select-none rounded-full border border-border bg-surface/70 shadow-[0_8px_28px_rgba(0,0,0,0.35)]",
         className,
       )}
       onPointerDown={onPointerDown}
