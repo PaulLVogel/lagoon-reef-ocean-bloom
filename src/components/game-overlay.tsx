@@ -1,6 +1,6 @@
 import { Circle, CreditCard, Crosshair, Gauge, Heart, Lock, Magnet, Play, Plus, Zap } from "lucide-react";
-import { useEffect, useState } from "react";
-import { isGameStarted, setGameStarted } from "@/game/input";
+import { useEffect, useRef, useState } from "react";
+import { hasGamepad, isGameStarted, sampleGamepadUi, setGameStarted } from "@/game/input";
 import {
   getHud,
   pickLevelOffer,
@@ -46,8 +46,67 @@ function shopIcon(kind: ShopKind) {
 
 export function GameOverlay() {
   const [hud, setHud] = useState(getHud);
+  const [padOn, setPadOn] = useState(false);
+  const [focus, setFocus] = useState(0);
+  const hudRef = useRef(hud);
+  const focusRef = useRef(0);
+  hudRef.current = hud;
+  focusRef.current = focus;
 
   useEffect(() => subscribeHud(setHud), []);
+
+  useEffect(() => {
+    setFocus(0);
+  }, [hud.waveClear, hud.leveling, hud.dead, hud.levelOffers?.length, hud.shopOffers?.length]);
+
+  useEffect(() => {
+    const onPad = () => setPadOn(hasGamepad());
+    window.addEventListener("gamepadconnected", onPad);
+    window.addEventListener("gamepaddisconnected", onPad);
+    onPad();
+    return () => {
+      window.removeEventListener("gamepadconnected", onPad);
+      window.removeEventListener("gamepaddisconnected", onPad);
+    };
+  }, []);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const pad = sampleGamepadUi();
+      if (pad.connected !== padOn) setPadOn(pad.connected);
+      const snap = hudRef.current;
+      const showStartNow = !snap.playing && !snap.dead && !snap.waveClear && !isGameStarted();
+      if (showStartNow && (pad.confirm || pad.start)) setGameStarted(true);
+      else if (snap.dead && (pad.confirm || pad.start)) requestRestart();
+      else if (snap.leveling && !snap.dead) {
+        const n = snap.levelOffers?.length ?? 0;
+        if (n > 0) {
+          if (pad.left || pad.up) setFocus((i) => (i + n - 1) % n);
+          if (pad.right || pad.down) setFocus((i) => (i + 1) % n);
+          if (pad.confirm) {
+            const offer = snap.levelOffers[focusRef.current % n];
+            if (offer) pickLevelOffer(offer.id);
+          }
+        }
+      } else if (snap.waveClear && !snap.dead && !snap.leveling) {
+        const offers = snap.shopOffers ?? [];
+        const n = offers.length;
+        if (n > 0) {
+          if (pad.left || pad.up) setFocus((i) => (i + n - 1) % n);
+          if (pad.right || pad.down) setFocus((i) => (i + 1) % n);
+          const offer = offers[focusRef.current % n];
+          if (pad.confirm && offer) pickShopOffer(offer.id);
+          if (pad.lock) requestToggleSlotLock(focusRef.current % n);
+        }
+        if (pad.reroll) requestReroll();
+        if (pad.start) requestNextWave();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [padOn]);
 
   const start = () => {
     setGameStarted(true);
@@ -60,7 +119,6 @@ export function GameOverlay() {
   const gold = hud.gold ?? 0;
   const goldShown = Math.round(hud.goldDisplay ?? gold);
   const slotLocked = hud.slotLocked ?? Array.from({ length: offers.length }, () => false);
-  const allLocked = offers.length > 0 && slotLocked.slice(0, offers.length).every(Boolean);
   const remaining = offers.filter((o) => !bought.includes(o.id));
   const pricedOut = remaining.length > 0 && !canAffordAny(gold, remaining);
   const canReroll =
@@ -109,16 +167,16 @@ export function GameOverlay() {
       <div className="flex-1" />
 
       <div className="flex items-end justify-between p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-        <VirtualStick className="pointer-events-auto md:hidden" />
-        <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted md:block">
-          WASD · head collects gems
+        <VirtualStick className="pointer-events-auto [@media(pointer:fine)]:hidden" />
+        <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted [@media(pointer:fine)]:block">
+          {padOn ? "Left stick / D-pad · A confirm · Start next" : "WASD or gamepad · head collects gems"}
         </p>
-        <div className="h-[120px] w-[120px] md:hidden" aria-hidden />
+        <div className="h-[132px] w-[132px] [@media(pointer:fine)]:hidden" aria-hidden />
       </div>
 
       {showStart ? (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/72 px-6 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-3xl border border-border bg-elevated p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <div className="pointer-events-auto absolute inset-0 overflow-y-auto overscroll-contain bg-bg/72 px-4 py-8 backdrop-blur-[2px] [-webkit-overflow-scrolling:touch]">
+          <div className="mx-auto my-auto w-full max-w-md rounded-3xl border border-border bg-elevated p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
             <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
               Arena prototype
             </p>
@@ -132,7 +190,7 @@ export function GameOverlay() {
             <ul className="mt-5 space-y-1.5 text-sm text-fg">
               <li className="flex gap-2">
                 <span className="text-muted">01</span>
-                WASD or left stick to move
+                WASD, on-screen stick, or gamepad left stick / D-pad
               </li>
               <li className="flex gap-2">
                 <span className="text-muted">02</span>
@@ -160,8 +218,8 @@ export function GameOverlay() {
       ) : null}
 
       {hud.dead ? (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/72 px-6 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-3xl border border-border bg-elevated p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <div className="pointer-events-auto absolute inset-0 overflow-y-auto overscroll-contain bg-bg/72 px-4 py-8 backdrop-blur-[2px] [-webkit-overflow-scrolling:touch]">
+          <div className="mx-auto my-auto w-full max-w-md rounded-3xl border border-border bg-elevated p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
             <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
               Downed
             </p>
@@ -179,7 +237,7 @@ export function GameOverlay() {
                 value={
                   (hud.kills ?? 0) > 0
                     ? `${((hud.totalGoldEarned ?? 0) / Math.max(1, hud.kills)).toFixed(1)} g/kill`
-                    : "—"
+                    : "\u2014"
                 }
               />
               <Stat label="Banked next" value={String(hud.nextWaveBank ?? 0)} />
@@ -202,8 +260,8 @@ export function GameOverlay() {
       ) : null}
 
       {hud.leveling && !hud.dead ? (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/78 px-4 py-8 backdrop-blur-[2px]">
-          <div className="w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
+        <div className="pointer-events-auto absolute inset-0 overflow-y-auto overscroll-contain bg-bg/78 px-4 py-8 backdrop-blur-[2px] [-webkit-overflow-scrolling:touch]">
+          <div className="mx-auto my-auto w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
             <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
               Level {hud.playerLevel ?? 1}
             </p>
@@ -215,12 +273,15 @@ export function GameOverlay() {
               segments grow the tail. Combat is paused.
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {(hud.levelOffers ?? []).map((offer) => (
+              {(hud.levelOffers ?? []).map((offer, index) => (
                 <button
                   key={offer.id}
                   type="button"
                   onClick={() => pickLevelOffer(offer.id)}
-                  className="flex min-h-[8.5rem] flex-col rounded-2xl border border-border bg-surface p-4 text-left active:scale-[0.99]"
+                  className={cn(
+                    "flex min-h-[8.5rem] flex-col rounded-2xl border bg-surface p-4 text-left active:scale-[0.99]",
+                    index === focus ? "border-fg ring-1 ring-fg/40" : "border-border",
+                  )}
                 >
                   <p className="text-[10px] tracking-[0.16em] text-muted uppercase">
                     {offer.weaponSlot === "head"
@@ -239,8 +300,8 @@ export function GameOverlay() {
       ) : null}
 
       {hud.waveClear && !hud.dead && !hud.leveling ? (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg/78 px-4 py-8 backdrop-blur-[2px]">
-          <div className="w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
+        <div className="pointer-events-auto absolute inset-0 overflow-y-auto overscroll-contain bg-bg/78 px-4 py-8 backdrop-blur-[2px] [-webkit-overflow-scrolling:touch]">
+          <div className="mx-auto my-auto w-full max-w-3xl rounded-3xl border border-border bg-elevated p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-7">
             <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
               Wave {hud.wave ?? 1} clear
             </p>
@@ -280,6 +341,7 @@ export function GameOverlay() {
                   boughtOther={bought.includes(offer.id)}
                   grayed={pricedOut && !bought.includes(offer.id)}
                   slotLocked={Boolean(slotLocked[index])}
+                  focused={index === focus}
                   onPick={() => pickShopOffer(offer.id)}
                   onLock={() => requestToggleSlotLock(index)}
                 />
@@ -332,6 +394,7 @@ function ShopCard({
   boughtOther,
   grayed,
   slotLocked,
+  focused,
   onPick,
   onLock,
 }: {
@@ -341,6 +404,7 @@ function ShopCard({
   boughtOther: boolean;
   grayed: boolean;
   slotLocked: boolean;
+  focused?: boolean;
   onPick: () => void;
   onLock: () => void;
 }) {
@@ -363,6 +427,7 @@ function ShopCard({
                 : "border-border bg-surface",
         boughtOther || unaffordable || grayed ? "opacity-40" : null,
         slotLocked && !grayed ? "ring-1 ring-amber-300/50" : null,
+        focused ? "ring-1 ring-fg/50" : null,
       )}
     >
       <button
