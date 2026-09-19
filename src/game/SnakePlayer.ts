@@ -135,7 +135,7 @@ export class SnakePlayer {
       this.bard = scene.add.sprite(0, 0, BARD_SHEET, BARD_IDLE_FRAME);
       this.bard.setOrigin(0.5, 0.72);
       this.bard.setScale(BARD_SCALE);
-      this.bard.setFlipX(true);
+      this.bard.setFlipX(false);
       this.head.add([this.pickupRing, this.headGlow, this.bard, this.mounts]);
     } else {
       this.bard = null;
@@ -427,8 +427,8 @@ export class SnakePlayer {
 
   private syncBard(moving: boolean) {
     if (!this.bard) return;
-    // Sheet faces left; flip when moving / last facing is right.
-    this.bard.flipX = Math.cos(this.facing) > 0;
+    // Sheet faces right; flip only when last facing is left.
+    this.bard.flipX = Math.cos(this.facing) < 0;
     if (moving) {
       if (this.bard.anims.currentAnim?.key !== BARD_WALK) this.bard.play(BARD_WALK, true);
     } else if (this.bard.anims.isPlaying) {
