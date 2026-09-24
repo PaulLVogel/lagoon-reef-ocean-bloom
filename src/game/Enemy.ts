@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { COLOR } from "./constants";
+import { COLOR, SLIME_ANIM, SLIME_FPS, SLIME_FRAMES, SLIME_SCALE, SLIME_SHEET } from "./constants";
 
 export type EnemyKind =
   | "swarmer"
@@ -52,7 +52,8 @@ export class Enemy {
   radius: number;
   speed: number;
   contact: number;
-  private readonly body: Phaser.GameObjects.Shape;
+  private readonly body: Phaser.GameObjects.Shape | Phaser.GameObjects.Sprite;
+  private readonly slime: Phaser.GameObjects.Sprite | null = null;
   private chargeUntil = 0;
   private nextVolley = 0;
   private nextCharge = 0;
@@ -72,19 +73,42 @@ export class Enemy {
     this.contact = spec.contact;
     this.root = scene.add.container(x, y);
     this.root.setDepth(spec.kind === "boss" ? 13 : spec.kind === "siege" ? 12 : 11);
-    const halo = scene.add.circle(0, 0, spec.radius + 6, spec.color, 0.2);
-    this.body = this.makeBody(scene, spec);
-    const coreR = spec.kind === "boss" ? 12 : spec.kind === "siege" || spec.kind === "armored_brute" ? 8 : spec.kind === "brute" ? 6 : 4;
-    const core = scene.add.circle(0, 0, coreR, spec.kind === "boss" ? 0xffe4e6 : COLOR.enemyCore);
-    this.root.add([halo, this.body, core]);
-    if (spec.kind === "boss") {
-      const crown = scene.add.triangle(0, -spec.radius - 8, 0, -14, 12, 6, -12, 6, 0xfbbf24);
-      this.root.add(crown);
+    if (spec.kind === "swarmer" && scene.textures.exists(SLIME_SHEET)) {
+      this.slime = this.makeSlime(scene);
+      this.body = this.slime;
+      this.root.add(this.slime);
+    } else {
+      const halo = scene.add.circle(0, 0, spec.radius + 6, spec.color, 0.2);
+      this.body = this.makeBody(scene, spec);
+      const coreR = spec.kind === "boss" ? 12 : spec.kind === "siege" || spec.kind === "armored_brute" ? 8 : spec.kind === "brute" ? 6 : 4;
+      const core = scene.add.circle(0, 0, coreR, spec.kind === "boss" ? 0xffe4e6 : COLOR.enemyCore);
+      this.root.add([halo, this.body, core]);
+      if (spec.kind === "boss") {
+        const crown = scene.add.triangle(0, -spec.radius - 8, 0, -14, 12, 6, -12, 6, 0xfbbf24);
+        this.root.add(crown);
+      }
+      if (spec.kind === "siege") {
+        const barrel = scene.add.rectangle(0, -spec.radius * 0.35, 8, spec.radius * 0.7, 0xc4b5fd);
+        this.root.add(barrel);
+      }
     }
-    if (spec.kind === "siege") {
-      const barrel = scene.add.rectangle(0, -spec.radius * 0.35, 8, spec.radius * 0.7, 0xc4b5fd);
-      this.root.add(barrel);
+  }
+
+  private makeSlime(scene: Phaser.Scene): Phaser.GameObjects.Sprite {
+    scene.textures.get(SLIME_SHEET).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (!scene.anims.exists(SLIME_ANIM)) {
+      scene.anims.create({
+        key: SLIME_ANIM,
+        frames: scene.anims.generateFrameNumbers(SLIME_SHEET, { start: 0, end: SLIME_FRAMES - 1 }),
+        frameRate: SLIME_FPS,
+        repeat: -1,
+      });
     }
+    const sprite = scene.add.sprite(0, 0, SLIME_SHEET, 0);
+    sprite.setOrigin(0.5, 0.7);
+    sprite.setScale(SLIME_SCALE);
+    sprite.play(SLIME_ANIM);
+    return sprite;
   }
 
   private makeBody(scene: Phaser.Scene, spec: EnemySpec): Phaser.GameObjects.Shape {
@@ -149,7 +173,12 @@ export class Enemy {
     }
     this.root.x += Math.cos(ang) * spd * dt;
     this.root.y += Math.sin(ang) * spd * dt;
-    this.root.setRotation(ang);
+    if (this.slime) {
+      this.root.setRotation(0);
+      this.slime.setFlipX(Math.cos(ang) < 0);
+    } else {
+      this.root.setRotation(ang);
+    }
   }
 
   tickBoss(now: number, tx: number, ty: number): BossShot[] {
@@ -206,7 +235,8 @@ export class Enemy {
   hit(dmg: number) {
     if (!this.alive) return false;
     this.hp -= dmg;
-    this.body.setFillStyle(COLOR.enemyHurt);
+    if (this.slime) this.slime.setTint(COLOR.enemyHurt);
+    else (this.body as Phaser.GameObjects.Shape).setFillStyle(COLOR.enemyHurt);
     if (this.hp <= 0) {
       this.root.destroy(true);
       return true;
