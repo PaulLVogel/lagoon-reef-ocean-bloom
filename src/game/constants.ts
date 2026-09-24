@@ -44,6 +44,14 @@ export const SLIME_FRAMES = 4;
 export const SLIME_FPS = 8;
 export const SLIME_SCALE = 2;
 
+/** Grunt (second-easiest horde): 4-frame 16×16 Goblin Fighter walk. */
+export const GOBLIN_SHEET = "vs-goblin";
+export const GOBLIN_ANIM = "vs-goblin-walk";
+export const GOBLIN_FRAME = 16;
+export const GOBLIN_FRAMES = 4;
+export const GOBLIN_FPS = 8;
+export const GOBLIN_SCALE = 2.25;
+
 /** Mortar impact: 8-frame 64×64 fireball sheet (user-provided). */
 export const MORTAR_FX_SHEET = "vs-mortar-fx";
 export const MORTAR_FX_ANIM = "vs-mortar-boom";
