@@ -1,5 +1,9 @@
 import * as Phaser from "phaser";
-import { COLOR, SLIME_ANIM, SLIME_FPS, SLIME_FRAMES, SLIME_SCALE, SLIME_SHEET } from "./constants";
+import {
+  COLOR,
+  GOBLIN_ANIM, GOBLIN_FPS, GOBLIN_FRAMES, GOBLIN_SCALE, GOBLIN_SHEET,
+  SLIME_ANIM, SLIME_FPS, SLIME_FRAMES, SLIME_SCALE, SLIME_SHEET,
+} from "./constants";
 
 export type EnemyKind =
   | "swarmer"
@@ -53,7 +57,7 @@ export class Enemy {
   speed: number;
   contact: number;
   private readonly body: Phaser.GameObjects.Shape | Phaser.GameObjects.Sprite;
-  private readonly slime: Phaser.GameObjects.Sprite | null = null;
+  private readonly walk: Phaser.GameObjects.Sprite | null = null;
   private chargeUntil = 0;
   private nextVolley = 0;
   private nextCharge = 0;
@@ -74,9 +78,13 @@ export class Enemy {
     this.root = scene.add.container(x, y);
     this.root.setDepth(spec.kind === "boss" ? 13 : spec.kind === "siege" ? 12 : 11);
     if (spec.kind === "swarmer" && scene.textures.exists(SLIME_SHEET)) {
-      this.slime = this.makeSlime(scene);
-      this.body = this.slime;
-      this.root.add(this.slime);
+      this.walk = this.makeWalk(scene, SLIME_SHEET, SLIME_ANIM, SLIME_FRAMES, SLIME_FPS, SLIME_SCALE, 0.7);
+      this.body = this.walk;
+      this.root.add(this.walk);
+    } else if (spec.kind === "grunt" && scene.textures.exists(GOBLIN_SHEET)) {
+      this.walk = this.makeWalk(scene, GOBLIN_SHEET, GOBLIN_ANIM, GOBLIN_FRAMES, GOBLIN_FPS, GOBLIN_SCALE, 0.65);
+      this.body = this.walk;
+      this.root.add(this.walk);
     } else {
       const halo = scene.add.circle(0, 0, spec.radius + 6, spec.color, 0.2);
       this.body = this.makeBody(scene, spec);
@@ -94,20 +102,28 @@ export class Enemy {
     }
   }
 
-  private makeSlime(scene: Phaser.Scene): Phaser.GameObjects.Sprite {
-    scene.textures.get(SLIME_SHEET).setFilter(Phaser.Textures.FilterMode.NEAREST);
-    if (!scene.anims.exists(SLIME_ANIM)) {
+  private makeWalk(
+    scene: Phaser.Scene,
+    sheet: string,
+    anim: string,
+    frames: number,
+    fps: number,
+    scale: number,
+    originY: number,
+  ): Phaser.GameObjects.Sprite {
+    scene.textures.get(sheet).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (!scene.anims.exists(anim)) {
       scene.anims.create({
-        key: SLIME_ANIM,
-        frames: scene.anims.generateFrameNumbers(SLIME_SHEET, { start: 0, end: SLIME_FRAMES - 1 }),
-        frameRate: SLIME_FPS,
+        key: anim,
+        frames: scene.anims.generateFrameNumbers(sheet, { start: 0, end: frames - 1 }),
+        frameRate: fps,
         repeat: -1,
       });
     }
-    const sprite = scene.add.sprite(0, 0, SLIME_SHEET, 0);
-    sprite.setOrigin(0.5, 0.7);
-    sprite.setScale(SLIME_SCALE);
-    sprite.play(SLIME_ANIM);
+    const sprite = scene.add.sprite(0, 0, sheet, 0);
+    sprite.setOrigin(0.5, originY);
+    sprite.setScale(scale);
+    sprite.play(anim);
     return sprite;
   }
 
@@ -173,9 +189,9 @@ export class Enemy {
     }
     this.root.x += Math.cos(ang) * spd * dt;
     this.root.y += Math.sin(ang) * spd * dt;
-    if (this.slime) {
+    if (this.walk) {
       this.root.setRotation(0);
-      this.slime.setFlipX(Math.cos(ang) < 0);
+      this.walk.setFlipX(Math.cos(ang) < 0);
     } else {
       this.root.setRotation(ang);
     }
@@ -235,7 +251,7 @@ export class Enemy {
   hit(dmg: number) {
     if (!this.alive) return false;
     this.hp -= dmg;
-    if (this.slime) this.slime.setTint(COLOR.enemyHurt);
+    if (this.walk) this.walk.setTint(COLOR.enemyHurt);
     else (this.body as Phaser.GameObjects.Shape).setFillStyle(COLOR.enemyHurt);
     if (this.hp <= 0) {
       this.root.destroy(true);
