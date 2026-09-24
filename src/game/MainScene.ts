@@ -122,10 +122,10 @@ export class MainScene extends Phaser.Scene {
     this.player = new SnakePlayer(this, cx, cy, (ev) => this.onFire(ev));
     this.foes = this.physics.add.group({ allowGravity: false, immovable: true });
     this.hostileGroup = this.physics.add.group({ allowGravity: false });
-    this.physics.add.overlap(this.foes, this.player.segments, (enemyObj, segObj) => {
+    this.physics.add.overlap(this.foes, this.player.segmentGroup, (enemyObj, segObj) => {
       this.handleSegmentDamage(enemyObj as Phaser.GameObjects.GameObject, segObj as Phaser.GameObjects.GameObject, "contact");
     });
-    this.physics.add.overlap(this.hostileGroup, this.player.segments, (shotObj, segObj) => {
+    this.physics.add.overlap(this.hostileGroup, this.player.segmentGroup, (shotObj, segObj) => {
       this.handleSegmentDamage(shotObj as Phaser.GameObjects.GameObject, segObj as Phaser.GameObjects.GameObject, "shot");
     });
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
