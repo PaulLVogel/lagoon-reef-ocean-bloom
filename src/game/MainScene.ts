@@ -5,6 +5,7 @@ import {
   GOLD_TALLY_MS, HUD_TICK_MS, MAX_ENEMIES, MOBILE_WIDTH, MOBILE_ZOOM, PICKUP_FLOAT_MS,
   PLAYER_IFRAME_MS, PLAYER_MAX_HP, SEGMENT_RADIUS, SPAWN_INTERVAL_MIN_MS, SPAWN_INTERVAL_MS,
   TILE, BARD_FRAME_SIZE, BARD_SHEET, COIN_FRAME_SIZE, COIN_SHEET,
+  SLIME_FRAME, SLIME_SHEET,
   MORTAR_FX_ANIM, MORTAR_FX_FPS, MORTAR_FX_FRAME_H, MORTAR_FX_FRAME_W, MORTAR_FX_FRAMES, MORTAR_FX_SHEET,
   POTION_KEY, SHOT_HIT_ANIM, SHOT_HIT_FPS, SHOT_HIT_FRAME, SHOT_HIT_FRAMES, SHOT_HIT_SCALE, SHOT_HIT_SHEET,
   WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
@@ -21,6 +22,7 @@ import { SnakePlayer } from "./SnakePlayer";
 import { randomSegmentWeaponType, type FireEvent, type WeaponSlot, type WeaponType } from "./Weapon";
 import { MORTAR_EXPLOSION_URL } from "./mortarExplosionAsset";
 import { SHOT_HIT_URL } from "./shotHitAsset";
+import { SLIME_URL } from "./slimeAsset";
 import { installMainSceneRestA } from "./mainSceneRestA";
 import { installMainSceneRestB } from "./mainSceneRestB";
 import { installMainSceneRestC } from "./mainSceneRestC";
@@ -78,6 +80,9 @@ export class MainScene extends Phaser.Scene {
       frameWidth: COIN_FRAME_SIZE, frameHeight: COIN_FRAME_SIZE,
     });
     this.load.image(POTION_KEY, "/sprites/potion-red.png");
+    this.load.spritesheet(SLIME_SHEET, SLIME_URL, {
+      frameWidth: SLIME_FRAME, frameHeight: SLIME_FRAME,
+    });
     this.load.spritesheet(MORTAR_FX_SHEET, MORTAR_EXPLOSION_URL, {
       frameWidth: MORTAR_FX_FRAME_W, frameHeight: MORTAR_FX_FRAME_H,
     });
