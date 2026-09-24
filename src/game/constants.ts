@@ -36,6 +36,14 @@ export const COIN_SCALE_T3 = 2.55;
 export const POTION_KEY = "vs-potion";
 export const POTION_SCALE = 2.2;
 
+/** Mortar impact: 10-frame 128×80 sheet (user-provided explosion). */
+export const MORTAR_FX_SHEET = "vs-mortar-fx";
+export const MORTAR_FX_ANIM = "vs-mortar-boom";
+export const MORTAR_FX_FRAME_W = 128;
+export const MORTAR_FX_FRAME_H = 80;
+export const MORTAR_FX_FRAMES = 10;
+export const MORTAR_FX_FPS = 18;
+
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
 export const BULLET_POOL = 96;
