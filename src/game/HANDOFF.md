@@ -15,11 +15,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
-8. Shop cart is live: `pickShopOffer` toggles `shopCart` only (deselect allowed). **Buy** (`requestBuyCart`) moves cart → `shopBought` + `pendingBuys`. **Next Wave** (`requestNextWave`) does **not** purchase leftover cart items. **`MainScene` must drain the whole `pendingBuys` queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame or folding Buy into Next Wave.
-9. **Flanker** is in the base horde pool (waves 1–4+). **Tangled** overlap penalty is still **not** in this repo. Do not invent Tangled unless named.
-10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
-11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
-12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
-13. Swarmer = Death Slime (`vs-slime`). Grunt (second-easiest) = Goblin Fighter (`vs-goblin` / `goblinAsset.ts`). Do not invent extra enemy sheets unless asked.
+8. Shop cart is live. 9. Flanker in pool; no Tangled. 10. Push full files. 11. `areaOfEffect` default 1, no shop card. 12. Mortar boom 8×64×64. 13. Swarmer = Death Slime; grunt = Goblin Fighter.
+14. **Segment physics:** overlap `player.segmentGroup` (never the empty `segments` array). After trail layout and after moving a hostile, `body.updateFromGameObject()`. `spawnHostile` must `physics.add.existing`, `setCircle(6)`, and `hostileGroup.add`. Dead cars do not take shot damage and do not destroy the red ball.
 
-Last shipped: **Goblin Fighter grunt sprite** — 4×16×16 walk strip on `grunt` (second-easiest horde after Death Slime swarmers). Sheet key `vs-goblin` via `goblinAsset.ts` (`GOBLIN_URL`). Shop cart + Buy vs Next Wave unchanged. Swarmer Death Slime and 8×64 mortar boom unchanged.
+Last shipped: **Siege/boss shots vs trail** (`a21498e`). Vercel READY. See root `HANDOFF.md` for full rules, file map, shop, Phase 6, XP.
