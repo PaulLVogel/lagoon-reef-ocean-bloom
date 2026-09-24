@@ -19,6 +19,9 @@ import { bankInterest, canAffordAny, rollShopOffers, SHOP_PITY_GOLD, SHOP_PITY_H
 import { SnakePlayer } from "./SnakePlayer";
 import { randomSegmentWeaponType, type FireEvent, type WeaponSlot, type WeaponType } from "./Weapon";
 import { MORTAR_EXPLOSION_URL } from "./mortarExplosionAsset";
+import { installMainSceneRestA } from "./mainSceneRestA";
+import { installMainSceneRestB } from "./mainSceneRestB";
+import { installMainSceneRestC } from "./mainSceneRestC";
 
 type HostileShot = { gfx: Phaser.GameObjects.Arc; vx: number; vy: number; damage: number; live: boolean };
 type Mine = {
@@ -109,3 +112,8 @@ export class MainScene extends Phaser.Scene {
       dead: false, waveClear: false, waveMs: WAVE_DURATION_MS, wave: 1, shopOffers: [], shopPicked: null,
     });
   }
+}
+
+installMainSceneRestA(MainScene.prototype);
+installMainSceneRestB(MainScene.prototype);
+installMainSceneRestC(MainScene.prototype);
