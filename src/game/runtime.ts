@@ -30,6 +30,7 @@ export type HudSnap = {
   shopFrozen: boolean;
   slotLocked: boolean[];
   shopBought: string[];
+  shopCart: string[];
   lastPityHp: number;
   lastPityGold: number;
   leveling: boolean;
@@ -52,6 +53,7 @@ type Bucket = {
   shopOffers: ShopOffer[];
   shopPicked: string | null;
   shopBought: string[];
+  shopCart: string[];
   purchaseHistory: ShopKind[];
   shopFrozen: boolean;
   frozenKinds: (ShopKind | null)[];
@@ -98,6 +100,7 @@ const emptyHud = (): HudSnap => ({
   shopFrozen: false,
   slotLocked: emptyLocks(),
   shopBought: [],
+  shopCart: [],
   lastPityHp: 0,
   lastPityGold: 0,
   leveling: false,
@@ -121,6 +124,7 @@ function emptyBucket(): Bucket {
     shopOffers: [],
     shopPicked: null,
     shopBought: [],
+    shopCart: [],
     purchaseHistory: [],
     shopFrozen: false,
     frozenKinds: emptyHeld().map(() => null),
@@ -153,6 +157,7 @@ export function runtime(): Bucket {
   if (!b.heldOffers || b.heldOffers.length !== SHOP_SLOTS) b.heldOffers = emptyHeld();
   if (!b.slotLocked || b.slotLocked.length !== SHOP_SLOTS) b.slotLocked = emptyLocks();
   if (!b.shopBought) b.shopBought = [];
+  if (!b.shopCart) b.shopCart = [];
   if (!b.pendingBuys) b.pendingBuys = [];
   if (b.pendingLevelWeapon === undefined) b.pendingLevelWeapon = null;
   if (typeof b.shopFrozen !== "boolean") b.shopFrozen = false;
@@ -205,6 +210,7 @@ export function requestRestart() {
   b.shopOffers = [];
   b.shopPicked = null;
   b.shopBought = [];
+  b.shopCart = [];
   b.purchaseHistory = [];
   b.pendingLevelWeapon = null;
   clearLocks(b);
@@ -232,6 +238,7 @@ export function requestRestart() {
     shopOffers: [],
     shopPicked: null,
     shopBought: [],
+    shopCart: [],
     fever: false,
     combo: 0,
     lastInterest: 0,
@@ -255,28 +262,29 @@ export function setShopOffers(offers: ShopOffer[]) {
   patchHud({ shopOffers: offers, shopPicked: null });
 }
 
-function selectedCost(b: Bucket, exceptId?: string) {
+function cartCost(b: Bucket, exceptId?: string) {
   return b.shopOffers
-    .filter((o) => b.shopBought.includes(o.id) && o.id !== exceptId)
+    .filter((o) => b.shopCart.includes(o.id) && o.id !== exceptId)
     .reduce((sum, o) => sum + o.cost, 0);
 }
 
-/** Toggle a card into / out of the cart. Gold and weapons apply only on Next Wave. */
+/** Toggle a card into / out of the cart. Does not spend gold. Purchased cards stay bought. */
 export function pickShopOffer(id: string) {
   const b = runtime();
   const offer = b.shopOffers.find((o) => o.id === id);
   if (!offer) return;
-  if (b.shopBought.includes(id)) {
-    b.shopBought = b.shopBought.filter((x) => x !== id);
-    b.shopPicked = b.shopBought[b.shopBought.length - 1] ?? null;
-    patchHud({ shopPicked: b.shopPicked, shopBought: [...b.shopBought] });
+  if (b.shopBought.includes(id)) return;
+  if (b.shopCart.includes(id)) {
+    b.shopCart = b.shopCart.filter((x) => x !== id);
+    b.shopPicked = b.shopCart[b.shopCart.length - 1] ?? null;
+    patchHud({ shopPicked: b.shopPicked, shopCart: [...b.shopCart] });
     return;
   }
-  const reserved = selectedCost(b);
+  const reserved = cartCost(b);
   if (!allowsOverdraft(offer.kind) && b.snap.gold - reserved < offer.cost) return;
   b.shopPicked = id;
-  b.shopBought = [...b.shopBought, id];
-  patchHud({ shopPicked: id, shopBought: [...b.shopBought] });
+  b.shopCart = [...b.shopCart, id];
+  patchHud({ shopPicked: id, shopCart: [...b.shopCart] });
 }
 
 export function requestReroll() {
@@ -322,39 +330,65 @@ export function requestToggleFreeze() {
   patchHud({ shopFrozen: true, slotLocked: [...b.slotLocked] });
 }
 
+/** Commit the cart: deduct gold, queue applies, shop stays open. */
+export function requestBuyCart() {
+  const b = runtime();
+  if (!b.snap.waveClear || b.snap.dead) return;
+  const picks = b.shopOffers.filter((o) => b.shopCart.includes(o.id) && !b.shopBought.includes(o.id));
+  if (!picks.length) return;
+  let gold = b.snap.gold;
+  const queued = b.pendingBuys ?? [];
+  const bought = [...b.shopBought];
+  const remainingCart: string[] = [];
+  for (const offer of picks) {
+    if (!allowsOverdraft(offer.kind) && gold < offer.cost) {
+      remainingCart.push(offer.id);
+      continue;
+    }
+    gold -= offer.cost;
+    queued.push({
+      kind: offer.kind,
+      weaponType: offer.weaponType ?? null,
+      weaponSlot: offer.weaponSlot ?? null,
+    });
+    bought.push(offer.id);
+    b.purchaseHistory = [...b.purchaseHistory, offer.kind];
+    const idx = b.shopOffers.findIndex((o) => o.id === offer.id);
+    if (idx >= 0) {
+      b.slotLocked[idx] = false;
+      b.frozenKinds[idx] = null;
+      if (b.heldOffers) b.heldOffers[idx] = null;
+    }
+  }
+  b.pendingBuys = queued;
+  b.shopBought = bought;
+  b.shopCart = remainingCart;
+  b.shopPicked = remainingCart[remainingCart.length - 1] ?? null;
+  const last = picks[picks.length - 1];
+  if (last) {
+    b.pendingUpgrade = last.kind;
+    b.pendingWeaponType = last.weaponType ?? null;
+    b.pendingWeaponSlot = last.weaponSlot ?? null;
+  }
+  b.shopFrozen = b.slotLocked.some(Boolean);
+  b.goldTallyFrom = b.snap.gold;
+  patchHud({
+    gold,
+    shopPicked: b.shopPicked,
+    shopBought: [...b.shopBought],
+    shopCart: [...b.shopCart],
+    shopFrozen: b.shopFrozen,
+    slotLocked: [...b.slotLocked],
+  });
+}
+
+/** Close the shop and start the next wave. Unbought cart items are dropped, not purchased. */
 export function requestNextWave() {
   const b = runtime();
   if (!b.snap.waveClear || b.snap.dead) return;
-  const picks = b.shopOffers.filter((o) => b.shopBought.includes(o.id));
-  if (picks.length) {
-    let gold = b.snap.gold;
-    b.pendingBuys = [];
-    for (const offer of picks) {
-      gold -= offer.cost;
-      b.pendingBuys.push({
-        kind: offer.kind,
-        weaponType: offer.weaponType ?? null,
-        weaponSlot: offer.weaponSlot ?? null,
-      });
-      b.purchaseHistory = [...b.purchaseHistory, offer.kind];
-      const idx = b.shopOffers.findIndex((o) => o.id === offer.id);
-      if (idx >= 0) {
-        b.slotLocked[idx] = false;
-        b.frozenKinds[idx] = null;
-        if (b.heldOffers) b.heldOffers[idx] = null;
-      }
-    }
-    b.pendingUpgrade = picks[picks.length - 1]?.kind ?? null;
-    b.pendingWeaponType = picks[picks.length - 1]?.weaponType ?? null;
-    b.pendingWeaponSlot = picks[picks.length - 1]?.weaponSlot ?? null;
-    b.shopFrozen = b.slotLocked.some(Boolean);
-    b.goldTallyFrom = b.snap.gold;
-    patchHud({
-      gold,
-      shopFrozen: b.shopFrozen,
-      slotLocked: [...b.slotLocked],
-    });
-  }
+  b.shopCart = [];
+  b.shopPicked = null;
+  patchHud({ shopCart: [], shopPicked: null });
   b.nextWaveRequested = true;
 }
 
