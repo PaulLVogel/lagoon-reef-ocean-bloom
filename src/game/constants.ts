@@ -36,13 +36,13 @@ export const COIN_SCALE_T3 = 2.55;
 export const POTION_KEY = "vs-potion";
 export const POTION_SCALE = 2.2;
 
-/** Mortar impact: 10-frame 128×80 sheet (user-provided explosion). */
+/** Mortar impact: 8-frame 64×64 fireball sheet (user-provided). */
 export const MORTAR_FX_SHEET = "vs-mortar-fx";
 export const MORTAR_FX_ANIM = "vs-mortar-boom";
-export const MORTAR_FX_FRAME_W = 128;
-export const MORTAR_FX_FRAME_H = 80;
-export const MORTAR_FX_FRAMES = 10;
-export const MORTAR_FX_FPS = 18;
+export const MORTAR_FX_FRAME_W = 64;
+export const MORTAR_FX_FRAME_H = 64;
+export const MORTAR_FX_FRAMES = 8;
+export const MORTAR_FX_FPS = 12;
 
 /** Single-shot impact: 5-frame 32×32 diamond burst (user-provided). */
 export const SHOT_HIT_SHEET = "vs-shot-hit";
