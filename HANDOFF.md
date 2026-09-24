@@ -21,8 +21,9 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
 13. Swarmer = Death Slime (`vs-slime`). Grunt (second-easiest) = Goblin Fighter (`vs-goblin` / `goblinAsset.ts`). Do not invent extra enemy sheets unless asked.
+14. **Segment physics:** overlap must target `player.segmentGroup`, never the empty `segments` array. After trail layout and after moving a hostile, call `body.updateFromGameObject()`. `spawnHostile` must `physics.add.existing`, `setCircle(6)`, and `hostileGroup.add`. Dead cars (`!isActive`) do not take shot damage and do not destroy the red ball.
 
-Last shipped: **Goblin Fighter grunt sprite** — 4×16×16 walk strip on `grunt` (second-easiest horde after Death Slime swarmers). Sheet key `vs-goblin` via `goblinAsset.ts` (`GOBLIN_URL`). Shop cart + Buy vs Next Wave unchanged. Swarmer Death Slime and 8×64 mortar boom unchanged.
+Last shipped: **Siege/boss shots vs trail** (`a21498e`) — Arcade circle bodies on hostiles, `hostileGroup` membership, `handleSegmentDamage(..., "shot")` destroys the ball on a living car and ignores dead weight. Segment group + `updateFromGameObject` on trail already on `main`. Vercel READY. Goblin grunt / Death Slime / shop cart unchanged.
 
 ## Rules
 
@@ -43,9 +44,10 @@ Last shipped: **Goblin Fighter grunt sprite** — 4×16×16 walk strip on `grunt
 
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, trail, HP/grey-out, weapons + merge, `applyGlobalStat`, `fullHeal()`, armor, auras |
+| `src/game/SnakePlayer.ts` | head, trail, `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, weapons + merge |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
-| `src/game/MainScene.ts` | FIT zoom, tiers + boss, mines (2s fuse), mortar shells + `playMortarExplosion`, shot-hit spark, XP/level-up pause, **pendingBuys drain**, shop apply |
+| `src/game/MainScene.ts` | FIT zoom, `foes`/`hostileGroup` overlaps, mines, mortar, shot-hit, **pendingBuys drain** |
+| `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
 | `src/game/mortarExplosionAsset.ts` | `MORTAR_EXPLOSION_URL` data URI for the 8×64 fireball sheet |
 | `src/game/shotHitAsset.ts` | `SHOT_HIT_URL` data URI for the 5×32 single-shot spark |
 | `src/game/slimeAsset.ts` | `SLIME_URL` data URI for the 4×16 Death Slime walk |
