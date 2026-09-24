@@ -100,6 +100,12 @@ export class MainScene extends Phaser.Scene {
     this.ensureShotHitFx();
     const cx = WORLD_SIZE / 2, cy = WORLD_SIZE / 2;
     this.shots = new Projectiles(this);
+    const innerUpdate = this.shots.update.bind(this.shots);
+    this.shots.update = (dt, onHit) => innerUpdate(dt, (x, y, dmg, r, mark, pierce, spark) => {
+      const hit = onHit(x, y, dmg, r, mark, pierce, spark);
+      if (hit && spark) this.playShotHit(x, y);
+      return hit;
+    });
     this.gems = new Gems(this);
     this.player = new SnakePlayer(this, cx, cy, (ev) => this.onFire(ev));
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
@@ -117,6 +123,29 @@ export class MainScene extends Phaser.Scene {
       kills: 0, gold: 0, goldDisplay: 0, totalGoldEarned: 0, nextWaveBank: 0, swarm: 0,
       dead: false, waveClear: false, waveMs: WAVE_DURATION_MS, wave: 1, shopOffers: [], shopPicked: null,
     });
+  }
+
+  private ensureShotHitFx() {
+    const tex = this.textures.get(SHOT_HIT_SHEET);
+    if (tex && tex.key !== "__MISSING") tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (!this.anims.exists(SHOT_HIT_ANIM)) {
+      this.anims.create({
+        key: SHOT_HIT_ANIM,
+        frames: this.anims.generateFrameNumbers(SHOT_HIT_SHEET, { start: 0, end: SHOT_HIT_FRAMES - 1 }),
+        frameRate: SHOT_HIT_FPS,
+        repeat: 0,
+      });
+    }
+  }
+
+  private playShotHit(x: number, y: number) {
+    if (!this.textures.exists(SHOT_HIT_SHEET)) return;
+    const fx = this.add.sprite(x, y, SHOT_HIT_SHEET, 0);
+    fx.setOrigin(0.5, 0.5);
+    fx.setScale(SHOT_HIT_SCALE);
+    fx.setDepth(18);
+    fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+    fx.play(SHOT_HIT_ANIM);
   }
 }
 
