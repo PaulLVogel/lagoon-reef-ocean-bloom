@@ -14,7 +14,21 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Goblin Fighter on grunt** (second-easiest horde). 4×16×16 walk strip (`vs-goblin` / `goblinAsset.ts`). Shop cart + Buy vs Next Wave unchanged. Swarmer Death Slime + 8×64 mortar boom unchanged.
+Last shipped: **Siege/boss shot vs trail** — hostiles get Arcade circle bodies and join `hostileGroup`; overlap + manual fallback damage living segments and destroy the red ball; dead cars pass shots through. Segment group + `updateFromGameObject` already live. Goblin grunt / Death Slime / shop cart unchanged. Commit `a21498e`. Live READY.
+
+### 0.3 Segment / hostile physics (do not regress)
+
+Phaser **does not** watch a native JS array after `physics.add.overlap` is created. Binding overlap to `player.segments` while it is empty ignores later `push`. Always use groups:
+
+- `SnakePlayer.segmentGroup = scene.physics.add.group({ allowGravity: false, immovable: true })` in the constructor.
+- `spawnSegment`: `physics.add.existing(container)`, `setCircle(SEGMENT_RADIUS)`, `setOffset(-r,-r)`, `body.moves = false`, `container.setData("segIndex", i)`, **`segmentGroup.add(container)`**.
+- `layoutSegments`: after `setPosition`, **`(body).updateFromGameObject()`** — `body.reset` is not enough for containers moved by `positionHistory`.
+- `MainScene.create`: `foes` group + `hostileGroup`. Overlap `foes` ↔ `segmentGroup` (`kind: "contact"`). Overlap `hostileGroup` ↔ `segmentGroup` (`kind: "shot"`) with process callback that returns false when the car is dead (`!isActive || hp <= 0`) so shots pass through dead weight.
+- `spawnHostile` (in `mainSceneRestB.ts`): enable body, `setCircle(6)`, tag `hostileShot` / `hostileDamage`, **`hostileGroup.add(gfx)`**. Tick: move by vx/vy then `updateFromGameObject`.
+- `handleSegmentDamage` lives on restB proto (class method is a stub overwritten at install). Shot branch: `damageSegment` then `destroy()` the ball. Dead cars return immediately and must **not** eat the projectile.
+- `tickHostiles` keeps a distance fallback vs living segments so a missed Arcade frame still pops the ball.
+- Dead-weight speed: `SnakePlayer.deadWeightMul()` (`max(0.55, 1 - dead*0.08)`) applied in `update` while moving. Grey-out tint `0x555555`. No floating HP bars.
+- Do **not** put Arcade velocity / `moveToObject` / pathfinding on the trail.
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -38,8 +52,9 @@ Last shipped: **Goblin Fighter on grunt** (second-easiest horde). 4×16×16 walk
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
-| `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
-| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
+| `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), `segmentGroup`, mine CDR ignore, mortar freeze |
+| `src/game/MainScene.ts` | `foes`/`hostileGroup` overlaps, mines, mortar, **pendingBuys drain** |
+| `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
 | `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
 | `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
