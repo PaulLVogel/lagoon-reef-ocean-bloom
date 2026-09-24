@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball, anim `vs-mortar-boom` @ 12 fps. Data URI in `src/game/mortarExplosionAsset.ts`; also `public/sprites/mortar-explosion.png`. Constants `MORTAR_FX_FRAME_W/H = 64`, `MORTAR_FX_FRAMES = 8`. Do **not** revert to the old 10-frame 128×80 sheet. Single-shot spark unchanged (`shotHitAsset.ts`, 5×32).
+Last shipped: **swarmer Death Slime** — 4×16×16 walk sheet `public/sprites/death-slime.png`, keys `vs-slime` / `vs-slime-walk` @ 8 fps, scale 2. `MainScene.preload` + `Enemy` swarmer-only sprite. Stats unchanged (r=8, hp=10, spd=165, contact=4). Mortar boom still 8×64×64; do **not** revert that sheet.
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -34,18 +34,19 @@ Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball, anim `vs
 | Path | Role |
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
-| `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_*** |
+| `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_***, **SLIME_*** |
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
 | `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
-| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
+| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot, slime sheet preload |
 | `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
 | `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
+| `src/game/slimeAsset.ts` | 4×16 Death Slime data URI (`SLIME_URL`) |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping.
 
 ## Enemies (current)
 
-Dynamic pool `allowedEnemyTypes(wave)`: swarmer / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats.
+Dynamic pool `allowedEnemyTypes(wave)`: swarmer (Death Slime sprite) / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats.
