@@ -44,6 +44,14 @@ export const MORTAR_FX_FRAME_H = 80;
 export const MORTAR_FX_FRAMES = 10;
 export const MORTAR_FX_FPS = 18;
 
+/** Single-shot impact: 5-frame 32×32 diamond burst (user-provided). */
+export const SHOT_HIT_SHEET = "vs-shot-hit";
+export const SHOT_HIT_ANIM = "vs-shot-hit";
+export const SHOT_HIT_FRAME = 32;
+export const SHOT_HIT_FRAMES = 5;
+export const SHOT_HIT_FPS = 20;
+export const SHOT_HIT_SCALE = 2.4;
+
 export const DUMMY_HP = 100;
 export const DUMMY_RADIUS = 28;
 export const BULLET_POOL = 96;
