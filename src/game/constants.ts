@@ -36,6 +36,14 @@ export const COIN_SCALE_T3 = 2.55;
 export const POTION_KEY = "vs-potion";
 export const POTION_SCALE = 2.2;
 
+/** Swarmer (easiest horde): 4-frame 16×16 Death Slime walk. */
+export const SLIME_SHEET = "vs-slime";
+export const SLIME_ANIM = "vs-slime-walk";
+export const SLIME_FRAME = 16;
+export const SLIME_FRAMES = 4;
+export const SLIME_FPS = 8;
+export const SLIME_SCALE = 2;
+
 /** Mortar impact: 8-frame 64×64 fireball sheet (user-provided). */
 export const MORTAR_FX_SHEET = "vs-mortar-fx";
 export const MORTAR_FX_ANIM = "vs-mortar-boom";
