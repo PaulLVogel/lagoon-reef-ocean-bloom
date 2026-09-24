@@ -15,13 +15,14 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 6. If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom`). Do not start over.
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
-8. Shop multi-buy is live: overlay can buy several cards before Next Wave. `pickShopOffer` appends to `runtime.pendingBuys`. **`MainScene` must drain that whole queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame.
+8. Shop cart is live: `pickShopOffer` toggles `shopCart` only (deselect allowed). **Buy** (`requestBuyCart`) moves cart → `shopBought` + `pendingBuys`. **Next Wave** (`requestNextWave`) does **not** purchase leftover cart items. **`MainScene` must drain the whole `pendingBuys` queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame or folding Buy into Next Wave.
 9. **Flanker** is in the base horde pool (waves 1–4+). **Tangled** overlap penalty is still **not** in this repo. Do not invent Tangled unless named.
 10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
+13. Swarmer = Death Slime (`vs-slime`). Grunt (second-easiest) = Goblin Fighter (`vs-goblin` / `goblinAsset.ts`). Do not invent extra enemy sheets unless asked.
 
-Last shipped: **swarmer = Death Slime** — 4-frame 16×16 walk (`vs-slime` / `vs-slime-walk` @ 8 fps, scale 2). Data URI: `src/game/slimeAsset.ts`. Loaded in `MainScene.preload`. `Enemy` draws slime sprite for `swarmer` only (no halo/core; flipX instead of rotate). Other horde kinds stay geometric. Mortar boom still 8×64×64.
+Last shipped: **Goblin Fighter grunt sprite** — 4×16×16 walk strip on `grunt` (second-easiest horde after Death Slime swarmers). Sheet key `vs-goblin` via `goblinAsset.ts` (`GOBLIN_URL`). Shop cart + Buy vs Next Wave unchanged. Swarmer Death Slime and 8×64 mortar boom unchanged.
 
 ## Rules
 
@@ -34,7 +35,7 @@ Last shipped: **swarmer = Death Slime** — 4-frame 16×16 walk (`vs-slime` / `v
 - `SnakePlayer` owns player, trail, weapons (incl. head gun), `heal()`, `grantWeapon()`, pickup radius, segment vacuum. `MainScene` owns enemies (tiers + boss), player bullets, hostile boss shots, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand). Shop HUD is **DOM** (`game-overlay.tsx`) so camera zoom must not be applied to menus/HP/gold.
 - Phaser: `import * as Phaser from "phaser"`. Scale: `Phaser.Scale.FIT` + `CENTER_BOTH`, design size `GAME_WIDTH×GAME_HEIGHT` (1280×720). Mobile (`width < MOBILE_WIDTH` or portrait) uses `cameras.main.setZoom(MOBILE_ZOOM)` (`2/3`); desktop zoom `1`.
-- Shapes only, except user-provided sheets already shipped (bard head, coins, potion, mortar boom, shot-hit, **death slime swarmer**). Do not invent extra PNGs.
+- Shapes only, except user-provided sheets already in `public/sprites` (bard head, coins, potion, mortar boom, shot-hit, **death slime swarmer**, **goblin fighter grunt**). Do not invent extra PNGs.
 - **Next Wave must not `scene.restart()`.** Death Restart still does.
 - **Pickups: head only.** Segments never collect. Vacuum leftover **gems** (not health/magnet) to gold at wave end. Segment vacuum pulls gems toward the head.
 
@@ -48,13 +49,14 @@ Last shipped: **swarmer = Death Slime** — 4-frame 16×16 walk (`vs-slime` / `v
 | `src/game/mortarExplosionAsset.ts` | `MORTAR_EXPLOSION_URL` data URI for the 8×64 fireball sheet |
 | `src/game/shotHitAsset.ts` | `SHOT_HIT_URL` data URI for the 5×32 single-shot spark |
 | `src/game/slimeAsset.ts` | `SLIME_URL` data URI for the 4×16 Death Slime walk |
+| `src/game/goblinAsset.ts` | `GOBLIN_URL` data URI for the 4×16 Goblin Fighter strip |
 | `src/game/Gems.ts` | star gems + health/magnet, pop, magnetize, vacuum, `collectHead` |
 | `src/game/stats.ts` | 6 global stats + head/segment weapon offers in `rollLevelOffers` |
 | `src/game/shop.ts` | `SHOP_SLOTS = 6`, `add_head_weapon` + `add_blaster`, lock copies the offer object |
-| `src/game/Enemy.ts` | horde kinds + boss; flanker orbit, charger dash, siege tail bolts; **swarmer = slime sprite** |
+| `src/game/Enemy.ts` | horde kinds + boss; slime swarmer + goblin grunt walk sprites; flanker orbit, charger dash, siege tail bolts |
 | `src/game/Projectiles.ts` | player bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, `pendingBuys` queue, shop lock/reroll/next |
-| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_***, **SLIME_*** |
+| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_***, **SLIME_***, **GOBLIN_*** |
 | `src/game/createGame.ts` | Phaser.Game with `Scale.FIT` + `CENTER_BOTH` |
 | `src/components/game-overlay.tsx` | start / HUD / XP / level-up menu / death / shop + Lock |
 | `src/components/game-canvas.tsx` | Phaser host; canvas must not `h-full w-full` (breaks FIT letterbox) |
@@ -86,7 +88,7 @@ Do **not** go back to a single purple chaser.
 | Kind | Size | HP base | Speed | Contact |
 |---|---|---|---|---|
 | `swarmer` (Death Slime sprite) | 8 | 10 | 165 | 4 |
-| `grunt` | 12 | 24 | 95 | 8 |
+| `grunt` (Goblin Fighter sprite) | 12 | 24 | 95 | 8 |
 | `flanker` (waves 1+) | 11 | 16 | 155 | 6 |
 | `armored_brute` (wave 5+) | 28 | 190 | 30 | 20 |
 | `charger` (wave 11+) | 16 | 42 | 88 | 24 |
@@ -103,7 +105,7 @@ Do **not** go back to a single purple chaser.
 - Shop rolls **6** cards (`SHOP_SLOTS`). Overlay grid is 3×2.
 - Each card has its own Lock. Lock stores the **exact** `ShopOffer` on `runtime.heldOffers[i]`. `rollShopOffers` copies a locked slot unchanged (same id, weapon, title, cost). `startNextWave` must **not** wipe `heldOffers`.
 - Reroll replaces **unlocked unbought** slots only. Blocked if none of those remain or gold < 5.
-- Buying a card deducts gold, marks that id in `shopBought`, queues `pendingBuys`, and unlocks **that** slot. Other cards stay buyable. The shop **does not close** until Next Wave.
+- Tapping a card toggles it in `shopCart`. Tapping again deselects it. **Buy** deducts gold, marks those ids in `shopBought`, queues `pendingBuys`, and unlocks those slots. Purchased cards stay marked Bought and cannot be deselected. Other cards stay selectable. The shop **does not close** until Next Wave. Next Wave drops any leftover cart without buying it.
 - `add_head_weapon` rolls HEAD pool onto the diamond. `add_blaster` rolls SEGMENT pool. Titles/badges: Head Upgrade vs New Segment.
 - `add_2_blasters` / `credit_card` call `grantWeapon(..., "segment")` twice.
 
