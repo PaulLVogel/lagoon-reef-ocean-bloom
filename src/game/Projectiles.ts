@@ -51,7 +51,7 @@ export class Projectiles {
     slot.ttl = ev.pierce ? 0.85 : 1.35;
     slot.radius = ev.radius;
     slot.pierce = Boolean(ev.pierce);
-    slot.hitSpark = Boolean(ev.hitSpark);
+    slot.hitSpark = ev.hitSpark ?? !slot.pierce;
     slot.hitMark = this.sweep++;
     slot.gfx.setFillStyle(ev.color, 1);
     slot.gfx.setScale(ev.radius / 4);
