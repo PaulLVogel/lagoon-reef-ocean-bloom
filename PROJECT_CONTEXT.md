@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball (`public/sprites/mortar-explosion.png`, anim `vs-mortar-boom`).
+Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball, anim `vs-mortar-boom` @ 12 fps. Data URI in `src/game/mortarExplosionAsset.ts`; also `public/sprites/mortar-explosion.png`. Constants `MORTAR_FX_FRAME_W/H = 64`, `MORTAR_FX_FRAMES = 8`. Do **not** revert to the old 10-frame 128×80 sheet. Single-shot spark unchanged (`shotHitAsset.ts`, 5×32).
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -25,6 +25,7 @@ Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball (`public/
 - `heldOffers()` copies `bucket.heldOffers[i]` first, then locked unbought `shopOffers[i]`.
 - **Flanker** is in the base spawn pool. **Tangled** is still **not** in this codebase.
 - `areaOfEffect` exists on `SnakePlayer` (default 1) and scales mortar AoE. No shop/level card raises it yet.
+- Mortar impact is the **8×64×64** fireball (`vs-mortar-boom`). Never restore the 10-frame 128×80 sheet.
 - When pushing: send **entire** files. Prefer `gh` clone + copy + `git push` for large sources. Truncated API payloads previously shipped only section 0 of this file.
 - After shipping: keep this file and `src/game/HANDOFF.md` in lockstep, then copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
@@ -33,12 +34,14 @@ Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball (`public/
 | Path | Role |
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
-| `src/game/constants.ts` | gold head, mortar/rail/chain colors |
+| `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_*** |
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
 | `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
-| `src/game/MainScene.ts` | mine 2s fuse, mortar shells, **pendingBuys drain**, shop apply with slot |
+| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
+| `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
+| `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping.
