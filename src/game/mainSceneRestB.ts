@@ -88,7 +88,24 @@ export function installMainSceneRestB(proto: any) {
       y = Phaser.Math.Clamp(y, ENEMY_RADIUS + 8, WORLD_SIZE - ENEMY_RADIUS - 8);
       tries += 1;
     } while (view.contains(x, y) && tries < 8);
-    this.enemies.push(new Enemy(this, x, y, spec ?? this.specFor(this.rollTier())));
+    const enemy = new Enemy(this, x, y, spec ?? this.specFor(this.rollTier()));
+    this.armEnemyBody(enemy);
+    this.enemies.push(enemy);
+  }
+
+  proto.armEnemyBody = function(this: any, enemy: Enemy) {
+    if (!enemy?.root) return;
+    const r = enemy.radius;
+    enemy.root.setSize(r * 2, r * 2);
+    if (!enemy.root.body) this.physics.add.existing(enemy.root);
+    const body = enemy.root.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setImmovable(true);
+    body.moves = false;
+    body.setCircle(r);
+    body.setOffset(-r, -r);
+    body.reset(enemy.x, enemy.y);
+    this.foes?.add(enemy.root);
   }
 
   proto.spawnBoss = function(this: any) {
@@ -99,7 +116,20 @@ export function installMainSceneRestB(proto: any) {
   }
 
   proto.spawnHostile = function(this: any, x: number, y: number, vx: number, vy: number, damage: number) {
-    const gfx = this.add.circle(x, y, 6, 0xf43f5e, 1); gfx.setDepth(15);
+    const r = 6;
+    const gfx = this.add.circle(x, y, r, 0xf43f5e, 1);
+    gfx.setDepth(15);
+    gfx.setData("hostileDamage", damage);
+    gfx.setData("hostileShot", true);
+    this.physics.add.existing(gfx);
+    const body = gfx.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setImmovable(true);
+    body.moves = false;
+    body.enable = true;
+    body.setCircle(r);
+    body.updateFromGameObject();
+    if (this.hostileGroup) this.hostileGroup.add(gfx);
     this.hostiles.push({ gfx, vx, vy, damage, live: true });
   }
 
@@ -107,10 +137,21 @@ export function installMainSceneRestB(proto: any) {
     for (const s of this.hostiles) {
       if (!s.live) continue;
       s.gfx.x += s.vx * dt; s.gfx.y += s.vy * dt;
+      const body = s.gfx.body as Phaser.Physics.Arcade.Body | undefined;
+      if (body) body.updateFromGameObject();
       if (s.gfx.x < 0 || s.gfx.y < 0 || s.gfx.x > WORLD_SIZE || s.gfx.y > WORLD_SIZE) { s.live = false; s.gfx.destroy(); continue; }
       if (now >= this.iFrameUntil && this.player.head) {
         const dx = s.gfx.x - this.player.x, dy = s.gfx.y - this.player.y;
-        if (dx * dx + dy * dy <= 196) { this.hurtPlayer(s.damage, now); s.live = false; s.gfx.destroy(); }
+        const need = 6 + this.player.getRadius();
+        if (dx * dx + dy * dy <= need * need) { this.hurtPlayer(s.damage, now); s.live = false; s.gfx.destroy(); continue; }
+      }
+      for (let i = 0; i < this.player.body.length; i++) {
+        const seg = this.player.body[i]!;
+        if (!seg.isActive || seg.hp <= 0) continue;
+        const dx = s.gfx.x - seg.sprite.x, dy = s.gfx.y - seg.sprite.y;
+        const need = 6 + SEGMENT_RADIUS;
+        if (dx * dx + dy * dy > need * need) continue;
+        if (this.player.damageSegment(i, s.damage, now)) { s.live = false; s.gfx.destroy(); break; }
       }
     }
     this.hostiles = this.hostiles.filter((s: any) => s.live);
@@ -144,13 +185,37 @@ export function installMainSceneRestB(proto: any) {
     }
   }
 
+  proto.handleSegmentDamage = function(this: any, enemyOrShot: Phaser.GameObjects.GameObject, segmentObj: Phaser.GameObjects.GameObject, kind: "contact" | "shot" = "contact") {
+    const index = this.player.indexOfSegment(segmentObj);
+    if (index < 0) return;
+    const state = this.player.body[index];
+    if (!state || !state.isActive || state.hp <= 0) return;
+    const now = this.time.now;
+    const isShot = kind === "shot" || !!(enemyOrShot as any)?.getData?.("hostileShot") || (enemyOrShot as any)?.getData?.("hostileDamage") != null;
+    if (isShot) {
+      const shot = this.hostiles.find((s: any) => s.live && (s.gfx === enemyOrShot || s.gfx.body === (enemyOrShot as any).body));
+      const dmg = shot?.damage ?? Number((enemyOrShot as any).getData?.("hostileDamage") ?? 0);
+      if (!dmg) return;
+      if (!this.player.damageSegment(index, dmg, now)) return;
+      if (shot) { shot.live = false; if (shot.gfx.active) shot.gfx.destroy(); }
+      else if ((enemyOrShot as any)?.active) (enemyOrShot as any).destroy();
+      return;
+    }
+    const enemy = this.enemies.find((e: Enemy) => e.alive && (e.root === enemyOrShot || e.root.body === (enemyOrShot as any).body));
+    if (!enemy) return;
+    this.player.damageSegment(index, enemy.contact, now);
+  }
+
   proto.checkPlayerContact = function(this: any, now: number) {
     for (const e of this.enemies) {
       if (!e.alive) continue;
+      const eBody = e.root.body as Phaser.Physics.Arcade.Body | undefined;
+      if (eBody) eBody.reset(e.x, e.y);
       if (now >= this.iFrameUntil && e.overlaps(this.player.x, this.player.y, this.player.getRadius())) this.hurtPlayer(e.contact, now);
       for (let i = 0; i < this.player.body.length; i++) {
         const s = this.player.body[i]!;
-        if (!e.overlaps(s.sprite.x, s.sprite.y, SEGMENT_RADIUS) || !s.isActive || s.hp <= 0) continue;
+        if (!s.isActive || s.hp <= 0) continue;
+        if (!e.overlaps(s.sprite.x, s.sprite.y, SEGMENT_RADIUS)) continue;
         this.player.damageSegment(i, e.contact, now);
       }
     }
