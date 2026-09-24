@@ -6,7 +6,8 @@ import {
   PLAYER_IFRAME_MS, PLAYER_MAX_HP, SEGMENT_RADIUS, SPAWN_INTERVAL_MIN_MS, SPAWN_INTERVAL_MS,
   TILE, BARD_FRAME_SIZE, BARD_SHEET, COIN_FRAME_SIZE, COIN_SHEET,
   MORTAR_FX_ANIM, MORTAR_FX_FPS, MORTAR_FX_FRAME_H, MORTAR_FX_FRAME_W, MORTAR_FX_FRAMES, MORTAR_FX_SHEET,
-  POTION_KEY, WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
+  POTION_KEY, SHOT_HIT_ANIM, SHOT_HIT_FPS, SHOT_HIT_FRAME, SHOT_HIT_FRAMES, SHOT_HIT_SCALE, SHOT_HIT_SHEET,
+  WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
 } from "./constants";
 import { ENEMY_BASE, ENEMY_HP_BASE, Enemy, type HordeKind, type EnemySpec } from "./Enemy";
 import { Gems } from "./Gems";
@@ -19,6 +20,7 @@ import { bankInterest, canAffordAny, rollShopOffers, SHOP_PITY_GOLD, SHOP_PITY_H
 import { SnakePlayer } from "./SnakePlayer";
 import { randomSegmentWeaponType, type FireEvent, type WeaponSlot, type WeaponType } from "./Weapon";
 import { MORTAR_EXPLOSION_URL } from "./mortarExplosionAsset";
+import { SHOT_HIT_URL } from "./shotHitAsset";
 import { installMainSceneRestA } from "./mainSceneRestA";
 import { installMainSceneRestB } from "./mainSceneRestB";
 import { installMainSceneRestC } from "./mainSceneRestC";
@@ -79,6 +81,9 @@ export class MainScene extends Phaser.Scene {
     this.load.spritesheet(MORTAR_FX_SHEET, MORTAR_EXPLOSION_URL, {
       frameWidth: MORTAR_FX_FRAME_W, frameHeight: MORTAR_FX_FRAME_H,
     });
+    this.load.spritesheet(SHOT_HIT_SHEET, SHOT_HIT_URL, {
+      frameWidth: SHOT_HIT_FRAME, frameHeight: SHOT_HIT_FRAME,
+    });
   }
 
   init() {
@@ -92,6 +97,7 @@ export class MainScene extends Phaser.Scene {
   create() {
     this.buildArena();
     this.ensureMortarFx();
+    this.ensureShotHitFx();
     const cx = WORLD_SIZE / 2, cy = WORLD_SIZE / 2;
     this.shots = new Projectiles(this);
     this.gems = new Gems(this);
