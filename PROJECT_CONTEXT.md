@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **coin + potion pickup sprites** — XP drops are spinning gold coins; HP drop is the red potion sprite. Magnet unchanged.
+Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball (`public/sprites/mortar-explosion.png`, anim `vs-mortar-boom`).
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
