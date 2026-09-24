@@ -20,7 +20,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 
-Last shipped: **coin + potion pickup sprites** — XP drops use 8-frame gold coin spin (`public/sprites/coin-gold.png`); HP drop uses the red flask (`public/sprites/potion-red.png`). Magnet still a purple diamond.
+Last shipped: **mortar impact sheet swap** — 8-frame 64×64 fireball (`public/sprites/mortar-explosion.png`, anim `vs-mortar-boom`). Single-shot hit spark unchanged.
 
 ## Rules
 
