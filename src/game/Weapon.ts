@@ -54,6 +54,8 @@ export type FireEvent = {
   tx?: number;
   ty?: number;
   aoe?: number;
+  /** Play the single-shot hit spritesheet on impact. */
+  hitSpark?: boolean;
 };
 
 type Proto = {
