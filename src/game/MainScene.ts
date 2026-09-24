@@ -125,9 +125,18 @@ export class MainScene extends Phaser.Scene {
     this.physics.add.overlap(this.foes, this.player.segmentGroup, (enemyObj, segObj) => {
       this.handleSegmentDamage(enemyObj as Phaser.GameObjects.GameObject, segObj as Phaser.GameObjects.GameObject, "contact");
     });
-    this.physics.add.overlap(this.hostileGroup, this.player.segmentGroup, (shotObj, segObj) => {
-      this.handleSegmentDamage(shotObj as Phaser.GameObjects.GameObject, segObj as Phaser.GameObjects.GameObject, "shot");
-    });
+    this.physics.add.overlap(
+      this.hostileGroup,
+      this.player.segmentGroup,
+      (shotObj, segObj) => {
+        this.handleSegmentDamage(shotObj as Phaser.GameObjects.GameObject, segObj as Phaser.GameObjects.GameObject, "shot");
+      },
+      (_shotObj, segObj) => {
+        const i = this.player.indexOfSegment(segObj as Phaser.GameObjects.GameObject);
+        const s = this.player.body[i];
+        return !!(s && s.isActive && s.hp > 0);
+      },
+    );
     this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
     this.cameras.main.startFollow(this.player.head, true, 0.14, 0.14);
     this.cameras.main.setDeadzone(70, 70);
