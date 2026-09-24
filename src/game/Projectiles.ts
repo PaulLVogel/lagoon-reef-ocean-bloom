@@ -12,6 +12,7 @@ type Slot = {
   live: boolean;
   pierce: boolean;
   hitMark: number;
+  hitSpark: boolean;
 };
 
 export class Projectiles {
@@ -35,6 +36,7 @@ export class Projectiles {
         live: false,
         pierce: false,
         hitMark: 0,
+        hitSpark: false,
       });
     }
   }
@@ -49,6 +51,7 @@ export class Projectiles {
     slot.ttl = ev.pierce ? 0.85 : 1.35;
     slot.radius = ev.radius;
     slot.pierce = Boolean(ev.pierce);
+    slot.hitSpark = Boolean(ev.hitSpark);
     slot.hitMark = this.sweep++;
     slot.gfx.setFillStyle(ev.color, 1);
     slot.gfx.setScale(ev.radius / 4);
@@ -59,7 +62,7 @@ export class Projectiles {
 
   update(
     dt: number,
-    onHit: (x: number, y: number, dmg: number, r: number, mark: number, pierce: boolean) => boolean,
+    onHit: (x: number, y: number, dmg: number, r: number, mark: number, pierce: boolean, spark: boolean) => boolean,
   ) {
     for (const s of this.slots) {
       if (!s.live) continue;
@@ -76,7 +79,7 @@ export class Projectiles {
         this.kill(s);
         continue;
       }
-      const consumed = onHit(s.gfx.x, s.gfx.y, s.damage, s.radius, s.hitMark, s.pierce);
+      const consumed = onHit(s.gfx.x, s.gfx.y, s.damage, s.radius, s.hitMark, s.pierce, s.hitSpark);
       if (consumed && !s.pierce) this.kill(s);
     }
   }
