@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **shop cart + Buy vs Next Wave**. Tap card = select/deselect (`shopCart`). Buy (`requestBuyCart`) spends gold and queues `pendingBuys`; shop stays open. Next Wave does not auto-buy leftover cart. Purchased ids live in `shopBought` and cannot be deselected. Swarmer Death Slime + 8×64 mortar boom unchanged.
+Last shipped: **Goblin Fighter on grunt** (second-easiest horde). 4×16×16 walk strip (`vs-goblin` / `goblinAsset.ts`). Shop cart + Buy vs Next Wave unchanged. Swarmer Death Slime + 8×64 mortar boom unchanged.
 
 ### 0.1 GitHub merge / push rules (do not skip)
 
@@ -34,18 +34,18 @@ Last shipped: **shop cart + Buy vs Next Wave**. Tap card = select/deselect (`sho
 | Path | Role |
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
-| `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_*** |
+| `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_***, **GOBLIN_*** / **SLIME_*** |
 | `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
-| `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue + shopCart |
+| `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
 | `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), colored segments, mine CDR ignore, mortar freeze |
 | `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
 | `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
 | `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
-| `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges, shop cart + Buy + Next Wave |
+| `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
 
 Keep this file and `src/game/HANDOFF.md` in lockstep when shipping.
 
 ## Enemies (current)
 
-Dynamic pool `allowedEnemyTypes(wave)`: swarmer / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats.
+Dynamic pool `allowedEnemyTypes(wave)`: swarmer / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats. Swarmer uses Death Slime (`vs-slime`). Grunt (second-easiest) uses Goblin Fighter (`vs-goblin`, `goblinAsset.ts`).
