@@ -21,7 +21,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
 
-Last shipped: **mortar impact sheet swap** — user fireball strip, **8 frames × 64×64**, anim `vs-mortar-boom` @ 12 fps. Source: `src/game/mortarExplosionAsset.ts` (`MORTAR_EXPLOSION_URL` data URI) + `public/sprites/mortar-explosion.png`. Constants: `MORTAR_FX_FRAME_W/H = 64`, `MORTAR_FX_FRAMES = 8`, `MORTAR_FX_FPS = 12`. `MainScene.playMortarExplosion` on shell impact. Single-shot hit spark (`vs-shot-hit`, 5×32×32) unchanged. Rail/cone unchanged.
+Last shipped: **swarmer = Death Slime** — 4-frame 16×16 walk (`vs-slime` / `vs-slime-walk` @ 8 fps, scale 2). Data URI: `src/game/slimeAsset.ts`. Loaded in `MainScene.preload`. `Enemy` draws slime sprite for `swarmer` only (no halo/core; flipX instead of rotate). Other horde kinds stay geometric. Mortar boom still 8×64×64.
 
 ## Rules
 
@@ -34,7 +34,7 @@ Last shipped: **mortar impact sheet swap** — user fireball strip, **8 frames �
 - `SnakePlayer` owns player, trail, weapons (incl. head gun), `heal()`, `grantWeapon()`, pickup radius, segment vacuum. `MainScene` owns enemies (tiers + boss), player bullets, hostile boss shots, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand). Shop HUD is **DOM** (`game-overlay.tsx`) so camera zoom must not be applied to menus/HP/gold.
 - Phaser: `import * as Phaser from "phaser"`. Scale: `Phaser.Scale.FIT` + `CENTER_BOTH`, design size `GAME_WIDTH×GAME_HEIGHT` (1280×720). Mobile (`width < MOBILE_WIDTH` or portrait) uses `cameras.main.setZoom(MOBILE_ZOOM)` (`2/3`); desktop zoom `1`.
-- Shapes only. No PNGs unless asked.
+- Shapes only, except user-provided sheets already shipped (bard head, coins, potion, mortar boom, shot-hit, **death slime swarmer**). Do not invent extra PNGs.
 - **Next Wave must not `scene.restart()`.** Death Restart still does.
 - **Pickups: head only.** Segments never collect. Vacuum leftover **gems** (not health/magnet) to gold at wave end. Segment vacuum pulls gems toward the head.
 
@@ -47,13 +47,14 @@ Last shipped: **mortar impact sheet swap** — user fireball strip, **8 frames �
 | `src/game/MainScene.ts` | FIT zoom, tiers + boss, mines (2s fuse), mortar shells + `playMortarExplosion`, shot-hit spark, XP/level-up pause, **pendingBuys drain**, shop apply |
 | `src/game/mortarExplosionAsset.ts` | `MORTAR_EXPLOSION_URL` data URI for the 8×64 fireball sheet |
 | `src/game/shotHitAsset.ts` | `SHOT_HIT_URL` data URI for the 5×32 single-shot spark |
+| `src/game/slimeAsset.ts` | `SLIME_URL` data URI for the 4×16 Death Slime walk |
 | `src/game/Gems.ts` | star gems + health/magnet, pop, magnetize, vacuum, `collectHead` |
 | `src/game/stats.ts` | 6 global stats + head/segment weapon offers in `rollLevelOffers` |
 | `src/game/shop.ts` | `SHOP_SLOTS = 6`, `add_head_weapon` + `add_blaster`, lock copies the offer object |
-| `src/game/Enemy.ts` | horde kinds + boss; flanker orbit, charger dash, siege tail bolts |
+| `src/game/Enemy.ts` | horde kinds + boss; flanker orbit, charger dash, siege tail bolts; **swarmer = slime sprite** |
 | `src/game/Projectiles.ts` | player bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, `pendingBuys` queue, shop lock/reroll/next |
-| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_*** |
+| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_***, **SLIME_*** |
 | `src/game/createGame.ts` | Phaser.Game with `Scale.FIT` + `CENTER_BOTH` |
 | `src/components/game-overlay.tsx` | start / HUD / XP / level-up menu / death / shop + Lock |
 | `src/components/game-canvas.tsx` | Phaser host; canvas must not `h-full w-full` (breaks FIT letterbox) |
@@ -84,7 +85,7 @@ Do **not** go back to a single purple chaser.
 
 | Kind | Size | HP base | Speed | Contact |
 |---|---|---|---|---|
-| `swarmer` | 8 | 10 | 165 | 4 |
+| `swarmer` (Death Slime sprite) | 8 | 10 | 165 | 4 |
 | `grunt` | 12 | 24 | 95 | 8 |
 | `flanker` (waves 1+) | 11 | 16 | 155 | 6 |
 | `armored_brute` (wave 5+) | 28 | 190 | 30 | 20 |
