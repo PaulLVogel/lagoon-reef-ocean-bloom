@@ -60,6 +60,14 @@ export const FANATIC_FRAMES = 4;
 export const FANATIC_FPS = 8;
 export const FANATIC_SCALE = 2.25;
 
+/** Armored brute (wave 5+): 4-frame 16×16 Lizardfolk Gladiator walk. */
+export const GLADIATOR_SHEET = "vs-gladiator";
+export const GLADIATOR_ANIM = "vs-gladiator-walk";
+export const GLADIATOR_FRAME = 16;
+export const GLADIATOR_FRAMES = 4;
+export const GLADIATOR_FPS = 8;
+export const GLADIATOR_SCALE = 3.25;
+
 /** Mortar impact: 8-frame 64×64 fireball sheet (user-provided). */
 export const MORTAR_FX_SHEET = "vs-mortar-fx";
 export const MORTAR_FX_ANIM = "vs-mortar-boom";
