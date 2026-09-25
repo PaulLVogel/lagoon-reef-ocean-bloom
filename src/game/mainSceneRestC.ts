@@ -151,18 +151,13 @@ export function installMainSceneRestC(proto: any) {
     this.tweens.add({ targets: t, y: y - 28, alpha: 0, duration: 420, onComplete: () => t.destroy() });
   }
   proto.buildArena = function(this: any) {
-    const g = this.add.graphics(); g.setVisible(false); g.fillStyle(COLOR.arena, 1); g.fillRect(0, 0, TILE, TILE);
-    g.lineStyle(1, COLOR.gridLine, 0.55); g.strokeRect(0.5, 0.5, TILE - 1, TILE - 1);
-    g.fillStyle(COLOR.grid, 0.35); g.fillCircle(TILE / 2, TILE / 2, 1.6);
-    g.generateTexture("arena-tile", TILE, TILE); g.destroy();
-    this.floor = this.add.tileSprite(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE, "arena-tile"); this.floor.setDepth(0);
     const border = this.add.graphics(); border.lineStyle(10, COLOR.bound, 0.9); border.strokeRect(6, 6, WORLD_SIZE - 12, WORLD_SIZE - 12);
     border.lineStyle(2, 0xb85c57, 0.35); border.strokeRect(18, 18, WORLD_SIZE - 36, WORLD_SIZE - 36); border.setDepth(1);
     for (let i = 0; i < 28; i++) this.add.circle(Phaser.Math.Between(120, WORLD_SIZE - 120), Phaser.Math.Between(120, WORLD_SIZE - 120), Phaser.Math.Between(2, 5), 0xffffff, 0.04).setDepth(2);
   }
   proto.isMobileView = function(this: any) { const w = this.scale.gameSize.width, h = this.scale.gameSize.height; return w < MOBILE_WIDTH || (h > w && w < 1100); }
   proto.fitZoom = function(this: any) { this.cameras.main.setZoom(this.isMobileView() ? MOBILE_ZOOM : DESKTOP_ZOOM); }
-  proto.onResize = function(this: any, _gameSize: Phaser.Structs.Size) { this.fitZoom(); }
+  proto.onResize = function(this: any, _gameSize: Phaser.Structs.Size) { this.fitZoom(); this.syncBackgroundTile?.(); }
   proto.cleanup = function(this: any) {
     this.scale.off("resize", this.onResize, this); this.unbindKeys?.(); this.unbindKeys = null;
     this.shots?.destroy(); this.gems?.destroy(); this.clearHostiles(); this.clearMines(); this.clearMortars();
