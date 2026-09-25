@@ -5,7 +5,6 @@ import {
   randomSegmentWeaponType,
   SEGMENT_WEAPONS,
   WEAPON_LABEL,
-  WEAPON_TIER_CAP,
   type WeaponSlot,
   type WeaponType,
 } from "./Weapon";
@@ -99,7 +98,7 @@ const CATALOG: CatalogItem[] = [
   {
     kind: "add_blaster",
     title: "New Segment",
-    blurb: "Grow the tail with one rolled segment weapon, or merge a duplicate up a tier.",
+    blurb: "Always grow a new tail car with one rolled segment weapon. Duplicates stack as extra cars.",
     cost: 36,
     rarity: "rare",
   },
@@ -113,7 +112,7 @@ const CATALOG: CatalogItem[] = [
   {
     kind: "add_2_blasters",
     title: "Add 2 weapon segments",
-    blurb: "Legendary: two rolled segment weapons, each merging if you already own the type.",
+    blurb: "Legendary: grow two new tail cars, each with a rolled segment weapon.",
     cost: 88,
     rarity: "legendary",
   },
@@ -133,7 +132,7 @@ const CATALOG: CatalogItem[] = [
   })),
 ];
 
-export const MAX_SEGMENTS = 14;
+export const MAX_SEGMENTS = Number.POSITIVE_INFINITY;
 export const SHOP_SLOTS = 6;
 export const SHOP_REROLL_COST = 5;
 export const SHOP_INTEREST_RATE = 0.1;
@@ -181,9 +180,8 @@ function rollHeadType(): WeaponType {
   return randomHeadWeaponType();
 }
 
-function rollSegmentType(owned: ShopOwned): WeaponType {
-  const mineCap = (owned.mineTier ?? 0) >= WEAPON_TIER_CAP;
-  return randomSegmentWeaponType(mineCap);
+function rollSegmentType(_owned: ShopOwned): WeaponType {
+  return randomSegmentWeaponType(false);
 }
 
 function decorateWeaponOffer(item: CatalogItem, owned: ShopOwned): CatalogItem {
@@ -214,30 +212,14 @@ function decorateWeaponOffer(item: CatalogItem, owned: ShopOwned): CatalogItem {
   }
   if (item.kind !== "add_blaster") return item;
   const weaponType = rollSegmentType(owned);
-  const merge = owned.canMerge?.(weaponType, "segment") ?? false;
-  const mergeToTier = owned.mergeToTier?.(weaponType, "segment") ?? 2;
   const label = WEAPON_LABEL[weaponType];
-  if (merge) {
-    return {
-      ...item,
-      weaponType,
-      weaponSlot: "segment",
-      merge: true,
-      mergeToTier,
-      title: `Merge ${label} → T${mergeToTier}`,
-      blurb:
-        weaponType === "mine_layer"
-          ? `Upgrade the only Mine layer segment. Caps at Tier 3, then it leaves the pool.`
-          : `Combine with your ${label} instead of growing a new segment. Caps at Tier 3.`,
-    };
-  }
   return {
     ...item,
     weaponType,
     weaponSlot: "segment",
     merge: false,
     title: `New Segment: ${label}`,
-    blurb: `Grow the tail. This segment fires only ${label.toLowerCase()}.`,
+    blurb: `Always grow a new tail car. This segment fires only ${label.toLowerCase()}.`,
   };
 }
 
@@ -249,8 +231,8 @@ export function rollShopOffers(
   held: (ShopOffer | null)[] = Array.from({ length: SHOP_SLOTS }, () => null),
 ): ShopOffer[] {
   const pool = CATALOG.filter((c) => {
-    if (c.kind === "add_blaster" && segments >= MAX_SEGMENTS && !owned.canMerge) return false;
-    if (c.kind === "add_2_blasters" && segments + 2 > MAX_SEGMENTS && !owned.canMerge) return false;
+    if (c.kind === "add_blaster" && Number.isFinite(MAX_SEGMENTS) && segments >= MAX_SEGMENTS) return false;
+    if (c.kind === "add_2_blasters" && Number.isFinite(MAX_SEGMENTS) && segments + 2 > MAX_SEGMENTS) return false;
     if (c.kind === "segment_vacuum" && owned.segmentVacuum) return false;
     if (c.kind === "credit_card" && purchasesOf(history, "credit_card") > 0) return false;
     return true;
