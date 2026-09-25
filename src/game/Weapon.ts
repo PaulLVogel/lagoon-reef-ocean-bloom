@@ -193,9 +193,9 @@ export function weaponCooldown(w: Weapon, globalCdr = 1) {
   return Math.max(80, w.baseFireRate / (w.fireRateMultiplier * globalCdr));
 }
 
-/** Mine cadence ignores GlobalStats cooldown reduction. */
-export function mineCadenceMs(w: Weapon) {
-  return Math.max(1800, MINE_BASE_CADENCE_MS - (w.tier - 1) * MINE_TIER_CADENCE_STEP_MS);
+/** Mine cadence ignores GlobalStats cooldown reduction. Steady 3s per mine car. */
+export function mineCadenceMs(_w: Weapon) {
+  return MINE_BASE_CADENCE_MS;
 }
 
 export function nextWeaponType(index: number): WeaponType {
