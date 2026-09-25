@@ -23,8 +23,9 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 13. Swarmer = Death Slime (`vs-slime`). Grunt (second-easiest) = Goblin Fighter (`vs-goblin` / `goblinAsset.ts`). Do not invent extra enemy sheets unless asked.
 14. **Segment physics:** overlap must target `player.segmentGroup`, never the empty `segments` array. After trail layout and after moving a hostile, call `body.updateFromGameObject()`. `spawnHostile` must `physics.add.existing`, `setCircle(6)`, and `hostileGroup.add`. Dead cars (`!isActive`) do not take shot damage and do not destroy the red ball.
 15. **Infinite train:** `grantSegmentWeapon` always `addArmedSegment`. Do **not** restore segment merge, mine uniqueness, mine T3 pool removal, or `MAX_SEGMENTS = 14`. Head merge + multi-shot stays. Mine fuse 2s / cadence 3s per car. Shop and level-up must keep offering segment weapons.
+16. **Looping fantasy floor:** `MainScene.ensureFantasyBackground()` draws a 256×256 moss/stone tile (`0x112211` base, `0x224422` grid, faint cobble) and `generateTexture('fantasyBackground')` **before** the TileSprite exists. Viewport `TileSprite` at (0,0), `setScrollFactor(0)`, `setDepth(-1)`. `syncBackgroundTile()` sets `tilePositionX/Y` to `cameras.main.scrollX/Y` every frame and on resize. `buildArena` must **not** recreate the old world-sized `arena-tile` floor. No extra floor PNG.
 
-Last shipped: **Infinite train + head multi-shot** (`97010f3`) — trailing buys always `addArmedSegment`. Mine layer uncapped (2s fuse, 3s cadence each). Head still merges; T2/T3 single-shot / cone / slash scale extra projectiles. Shop + level pools never drop segment weapons.
+Last shipped: **Looping fantasy floor** (`f50916f`) — camera-locked TileSprite moss/stone grid. Infinite train + head multi-shot still live. Mine layer uncapped (2s fuse, 3s cadence each).
 
 ## Rules
 
@@ -40,6 +41,7 @@ Last shipped: **Infinite train + head multi-shot** (`97010f3`) — trailing buys
 - Shapes only, except user-provided sheets already in `public/sprites` (bard head, coins, potion, mortar boom, shot-hit, **death slime swarmer**, **goblin fighter grunt**). Do not invent extra PNGs.
 - **Next Wave must not `scene.restart()`.** Death Restart still does.
 - **Pickups: head only.** Segments never collect. Vacuum leftover **gems** (not health/magnet) to gold at wave end. Segment vacuum pulls gems toward the head.
+- Arena floor is the generated `fantasyBackground` TileSprite (camera-locked). Do not restore the old `arena-tile` world sprite.
 
 ## File map
 
@@ -47,7 +49,9 @@ Last shipped: **Infinite train + head multi-shot** (`97010f3`) — trailing buys
 |---|---|
 | `src/game/SnakePlayer.ts` | head, trail, `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, head merge + multi-shot, segment append |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
-| `src/game/MainScene.ts` | FIT zoom, `foes`/`hostileGroup` overlaps, mines, mortar, shot-hit, **pendingBuys drain** |
+| `src/game/MainScene.ts` | fantasy TileSprite floor, FIT zoom, `foes`/`hostileGroup` overlaps, mines, mortar, shot-hit, **pendingBuys drain** |
+| `src/game/mainSceneRestA.ts` | `update` + `syncBackgroundTile`, waves, shop roll |
+| `src/game/mainSceneRestC.ts` | mines/mortar FX, level-up, `buildArena` border only |
 | `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
 | `src/game/mortarExplosionAsset.ts` | `MORTAR_EXPLOSION_URL` data URI for the 8×64 fireball sheet |
 | `src/game/shotHitAsset.ts` | `SHOT_HIT_URL` data URI for the 5×32 single-shot spark |
