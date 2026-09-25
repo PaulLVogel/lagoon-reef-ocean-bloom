@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Looping fantasy floor** (`f50916f`) on top of infinite train + head multi-shot. Arena is no longer a flat `COLOR.arena` fill. `MainScene.ensureFantasyBackground()` generates a 256×256 moss/stone tile (`fantasyBackground`) then a viewport `TileSprite` locked to the camera. Segment weapons still always append a new car. Head weapons still merge to T3. Mines stay 2s fuse + 3s cadence per car.
+Last shipped: **Lizardfolk Gladiator armored-brute sprite** (`vs-gladiator` / `gladiatorAsset.ts`, 4×16). Kind/AI/unlock (wave 5+) unchanged. Flanker still Goblin Fanatic. Segment weapons still always append a new car. Head weapons still merge to T3. Mines stay 2s fuse + 3s cadence per car.
 
 ### 0.3 Segment / hostile physics (do not regress)
 
@@ -66,4 +66,4 @@ Keep this file and `src/game/HANDOFF.md` in lockstep when shipping.
 
 ## Enemies (current)
 
-Dynamic pool `allowedEnemyTypes(wave)`: swarmer / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats. Swarmer uses Death Slime (`vs-slime`). Grunt (second-easiest) uses Goblin Fighter (`vs-goblin`, `goblinAsset.ts`).
+Dynamic pool `allowedEnemyTypes(wave)`: swarmer / grunt / flanker from wave 1; armored_brute at 5; charger at 11; siege at 15. Boss on every `wave % 10 === 0` via living-boss check (not a sticky `wave === 10` flag). Era `floor((wave-1)/10)` multiplies horde HP/contact and boss stats. Swarmer uses Death Slime (`vs-slime`). Grunt (second-easiest) uses Goblin Fighter (`vs-goblin`, `goblinAsset.ts`). Flanker uses Goblin Fanatic (`vs-fanatic`, `fanaticAsset.ts`). Armored brute uses Lizardfolk Gladiator (`vs-gladiator`, `gladiatorAsset.ts`).
