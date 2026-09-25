@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import {
   COLOR,
   FANATIC_ANIM, FANATIC_FPS, FANATIC_FRAMES, FANATIC_SCALE, FANATIC_SHEET,
+  GLADIATOR_ANIM, GLADIATOR_FPS, GLADIATOR_FRAMES, GLADIATOR_SCALE, GLADIATOR_SHEET,
   GOBLIN_ANIM, GOBLIN_FPS, GOBLIN_FRAMES, GOBLIN_SCALE, GOBLIN_SHEET,
   SLIME_ANIM, SLIME_FPS, SLIME_FRAMES, SLIME_SCALE, SLIME_SHEET,
 } from "./constants";
@@ -88,6 +89,10 @@ export class Enemy {
       this.root.add(this.walk);
     } else if (spec.kind === "flanker" && scene.textures.exists(FANATIC_SHEET)) {
       this.walk = this.makeWalk(scene, FANATIC_SHEET, FANATIC_ANIM, FANATIC_FRAMES, FANATIC_FPS, FANATIC_SCALE, 0.65);
+      this.body = this.walk;
+      this.root.add(this.walk);
+    } else if (spec.kind === "armored_brute" && scene.textures.exists(GLADIATOR_SHEET)) {
+      this.walk = this.makeWalk(scene, GLADIATOR_SHEET, GLADIATOR_ANIM, GLADIATOR_FRAMES, GLADIATOR_FPS, GLADIATOR_SCALE, 0.7);
       this.body = this.walk;
       this.root.add(this.walk);
     } else {
