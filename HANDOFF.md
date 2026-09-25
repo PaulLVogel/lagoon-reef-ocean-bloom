@@ -22,8 +22,9 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
 13. Swarmer = Death Slime (`vs-slime`). Grunt (second-easiest) = Goblin Fighter (`vs-goblin` / `goblinAsset.ts`). Do not invent extra enemy sheets unless asked.
 14. **Segment physics:** overlap must target `player.segmentGroup`, never the empty `segments` array. After trail layout and after moving a hostile, call `body.updateFromGameObject()`. `spawnHostile` must `physics.add.existing`, `setCircle(6)`, and `hostileGroup.add`. Dead cars (`!isActive`) do not take shot damage and do not destroy the red ball.
+15. **Infinite train:** `grantSegmentWeapon` always `addArmedSegment`. Do **not** restore segment merge, mine uniqueness, mine T3 pool removal, or `MAX_SEGMENTS = 14`. Head merge + multi-shot stays. Mine fuse 2s / cadence 3s per car. Shop and level-up must keep offering segment weapons.
 
-Last shipped: **Siege/boss shots vs trail** (`a21498e`) — Arcade circle bodies on hostiles, `hostileGroup` membership, `handleSegmentDamage(..., "shot")` destroys the ball on a living car and ignores dead weight. Segment group + `updateFromGameObject` on trail already on `main`. Vercel READY. Goblin grunt / Death Slime / shop cart unchanged.
+Last shipped: **Infinite train + head multi-shot** (`97010f3`) — trailing buys always `addArmedSegment`. Mine layer uncapped (2s fuse, 3s cadence each). Head still merges; T2/T3 single-shot / cone / slash scale extra projectiles. Shop + level pools never drop segment weapons.
 
 ## Rules
 
@@ -31,7 +32,7 @@ Last shipped: **Siege/boss shots vs trail** (`a21498e`) — Arcade circle bodies
 - Segment HP: starts at 100 (`segmentMaxHp` grows with Max HP stat). `isActive` false at 0 (no fire, tint `0x555555`). Logic stays; **do not draw floating health bars**. `reviveAll()` / `fullHeal()` restore HP. Dead segments do not take more damage. Head contact damages player HP; segment contact damages that segment only. Armor is flat reduction (`mitigate`, min 1).
 - Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** starts with `single_shot` and can stack more **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
 - Segment weapons: each trailing **active** segment holds **exactly one** `Weapon`. Targeting and shots use **that origin (x, y)**. Dead segments do not fire. Head weapons all fire from the diamond. No orbiting extras.
-- Weapon tiers: `Weapon.tier` is 1–3 (`WEAPON_TIER_CAP`). Duplicate buys `grantWeapon(type, slot)` merge the lowest-tier copy **in that slot**. Mine layer is unique: one segment only; T3 removes it from shop/level pools. Mine cadence **ignores** global CDR (3s, slight tier trim) and mines arm for 2s before colliding.
+- Weapon tiers: `Weapon.tier` is 1–3 (`WEAPON_TIER_CAP`) **on the head only**. Duplicate **head** buys merge. Duplicate **segment** buys always grow a new car. Mine layer is uncapped; each mine car drops on a fixed 3s cadence (ignores CDR) and arms for 2s.
 - Mortar: fires a slow shell at the enemy's **frozen (x, y)**; no contact damage in flight; AoE on impact scales with `SnakePlayer.areaOfEffect`. Impact plays `vs-mortar-boom` (8×64×64 fireball), not the old 10-frame 128×80 sheet.
 - `SnakePlayer` owns player, trail, weapons (incl. head gun), `heal()`, `grantWeapon()`, pickup radius, segment vacuum. `MainScene` owns enemies (tiers + boss), player bullets, hostile boss shots, gems, wave/death/shop apply, Fever, float+blip.
 - HUD/input: `runtime.ts` → `window.__vsRuntime` (do not use zustand). Shop HUD is **DOM** (`game-overlay.tsx`) so camera zoom must not be applied to menus/HP/gold.
@@ -44,7 +45,7 @@ Last shipped: **Siege/boss shots vs trail** (`a21498e`) — Arcade circle bodies
 
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, trail, `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, weapons + merge |
+| `src/game/SnakePlayer.ts` | head, trail, `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, head merge + multi-shot, segment append |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
 | `src/game/MainScene.ts` | FIT zoom, `foes`/`hostileGroup` overlaps, mines, mortar, shot-hit, **pendingBuys drain** |
 | `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
@@ -71,17 +72,17 @@ Orbiting / circling blades are **gone**. Head inventory + 1-to-1 segments.
 |---|---|---|
 | Head (diamond) | HEAD pool | `aura` / `melee_slash` / `cone_burst` / `single_shot` stack on the head. `grantWeapon(type, "head")`. |
 | Shop-grown segment | SEGMENT pool | `railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`. Exactly one per segment. |
-| Duplicate buy | merge | lowest-tier copy **in that slot** → next tier. Mine: never a second segment. Cap T3. |
+| Duplicate buy | head merge / segment append | Head: lowest-tier copy → next tier (multi-shot scales). Segment: always a new car. Mine: unlimited cars. |
 | `cone_burst` | head | spread pellets from **head** xy |
 | `melee_slash` | head | instant arc/cleave from **head** xy |
 | `aura` | head | garlic ring around the diamond |
 | `single_shot` | both | nearest in-range enemy from that origin |
-| `mine_layer` | segment | 1 only; ~3s cadence ignores CDR; 2s grey→red fuse; T3 leaves pools |
+| `mine_layer` | segment | unlimited cars; 3s cadence ignores CDR; 2s grey→red fuse |
 | `railgun` | segment | fast pierce bullet (red segment) |
 | `chain_lightning` | segment | hit nearest, then bolt (cyan segment) |
 | `mortar` | segment | slow shell to frozen (x,y); no travel hit; AoE × `areaOfEffect` (green segment); impact = `vs-mortar-boom` |
 
-Shop: `add_head_weapon` vs `add_blaster`. Overlay badges **Head Upgrade** / **New Segment**. `grantWeapon(type, slot)` is the add-or-merge hook. `applyItemModifier` still works.
+Shop: `add_head_weapon` vs `add_blaster`. Overlay badges **Head Upgrade** / **New Segment**. `grantWeapon(type, "head")` adds or merges; `grantWeapon(type, "segment")` always grows a car. `applyItemModifier` still works.
 
 ## Enemies & waves
 
@@ -102,7 +103,7 @@ Do **not** go back to a single purple chaser.
 - **Boss waves (`wave > 0 && wave % BOSS_WAVE === 0`)**: 10, 20, 30… No normal spawns. One boss. HP/contact scale with wave *and* era (`ERA_BOSS_HP_MUL` / `ERA_BOSS_DMG_MUL`). Volley/aimed shot damage tracks contact. Kill-boss dumps gems (18 + 6×era) and calls `endWave()` so shop opens; the 30s timer still ends the wave if the boss lives.
 - **Era spike:** `era = floor((wave-1)/10)`. Waves 1–10 era 0; 11–20 era 1. Horde HP and contact use `waveMul * ERA_HORDE_MUL^era`. Spawn interval divides by `ERA_SPAWN_MUL^era`. Cap rises with era. Wave 11 horde is meant to feel much worse than wave 9. Unlock pool expands with wave; siege engines fire slow bolts at the tail.
 
-## Shop locking & merge
+## Shop locking & cart
 
 - Shop rolls **6** cards (`SHOP_SLOTS`). Overlay grid is 3×2.
 - Each card has its own Lock. Lock stores the **exact** `ShopOffer` on `runtime.heldOffers[i]`. `rollShopOffers` copies a locked slot unchanged (same id, weapon, title, cost). `startNextWave` must **not** wipe `heldOffers`.
@@ -132,13 +133,13 @@ Collect → `gems.collectHead(player.x, player.y, dt, { pickupRadius, segments, 
 
 ## Phase 2 weapons (historical)
 
-Cycling loadout on spawn is **gone**. Head starts single-shot; shop rolls/merges. `turret_*` / `blaster_rate` still buff `cone_burst` / `single_shot`.
+Cycling loadout on spawn is **gone**. Head starts single-shot; head duplicates merge; segment duplicates append. `turret_*` / `blaster_rate` still buff `cone_burst` / `single_shot`.
 
 ## XP, level-up, global stats
 
 Do not rebuild unless asked.
 
 - XP from gem collect + wave-end gem vacuum (`MainScene.grantXp`). Threshold `xpForLevel(level) = round(18 * level^1.5)`.
-- Level-up: `fullHeal()` + pause (`leveling`, `physics.world.pause()`), 3 random picks from **6 stats + HEAD weapons + SEGMENT weapons**. Overlay calls `pickLevelOffer` with `weaponSlot`. Scene applies `applyGlobalStat` and/or `grantWeapon(type, slot)`. Mine T3 is excluded.
+- Level-up: `fullHeal()` + pause (`leveling`, `physics.world.pause()`), 3 random picks from **6 stats + HEAD weapons + SEGMENT weapons**. Overlay calls `pickLevelOffer` with `weaponSlot`. Scene applies `applyGlobalStat` and/or `grantWeapon(type, slot)`. Segment weapons (including mine) stay in the pool forever.
 - Stats: Max HP +20, Move speed ×1.12, CDR ×1.12, Damage ×1.15, Pickup radius +1 stack, Armor +2.
 - Same six also roll in the end-of-wave shop as `stat_*`.
