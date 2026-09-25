@@ -7,6 +7,7 @@ import {
   TILE, BARD_FRAME_SIZE, BARD_SHEET, COIN_FRAME_SIZE, COIN_SHEET,
   SLIME_FRAME, SLIME_SHEET,
   GOBLIN_FRAME, GOBLIN_SHEET,
+  FANATIC_FRAME, FANATIC_SHEET,
   MORTAR_FX_ANIM, MORTAR_FX_FPS, MORTAR_FX_FRAME_H, MORTAR_FX_FRAME_W, MORTAR_FX_FRAMES, MORTAR_FX_SHEET,
   POTION_KEY, SHOT_HIT_ANIM, SHOT_HIT_FPS, SHOT_HIT_FRAME, SHOT_HIT_FRAMES, SHOT_HIT_SCALE, SHOT_HIT_SHEET,
   WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
@@ -25,6 +26,7 @@ import { MORTAR_EXPLOSION_URL } from "./mortarExplosionAsset";
 import { SHOT_HIT_URL } from "./shotHitAsset";
 import { SLIME_URL } from "./slimeAsset";
 import { GOBLIN_URL } from "./goblinAsset";
+import { FANATIC_URL } from "./fanaticAsset";
 import { installMainSceneRestA } from "./mainSceneRestA";
 import { installMainSceneRestB } from "./mainSceneRestB";
 import { installMainSceneRestC } from "./mainSceneRestC";
@@ -90,6 +92,9 @@ export class MainScene extends Phaser.Scene {
     });
     this.load.spritesheet(GOBLIN_SHEET, GOBLIN_URL, {
       frameWidth: GOBLIN_FRAME, frameHeight: GOBLIN_FRAME,
+    });
+    this.load.spritesheet(FANATIC_SHEET, FANATIC_URL, {
+      frameWidth: FANATIC_FRAME, frameHeight: FANATIC_FRAME,
     });
     this.load.spritesheet(MORTAR_FX_SHEET, MORTAR_EXPLOSION_URL, {
       frameWidth: MORTAR_FX_FRAME_W, frameHeight: MORTAR_FX_FRAME_H,
