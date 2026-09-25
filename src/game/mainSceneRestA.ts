@@ -16,6 +16,7 @@ import { randomSegmentWeaponType, type FireEvent, type WeaponSlot, type WeaponTy
 
 export function installMainSceneRestA(proto: any) {
   proto.update = function(this: any, time: number, delta: number) {
+    this.syncBackgroundTile?.();
     const bucketTop = runtime();
     if (bucketTop.pendingLevelStat || bucketTop.pendingLevelWeapon) {
       const stat = bucketTop.pendingLevelStat;
