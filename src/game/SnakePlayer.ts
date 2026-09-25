@@ -177,9 +177,12 @@ export class SnakePlayer {
   }
 
   ownedWeaponTypes(): WeaponType[] { return this.weapons.map((w) => w.type); }
-  mineTier(): number { return this.weapons.find((w) => w.type === "mine_layer" && w.segmentIndex >= 0)?.tier ?? 0; }
-  mineAtCap() { return this.mineTier() >= WEAPON_TIER_CAP; }
-  canMerge(type: WeaponType, slot?: WeaponSlot) { return this.mergeTargets(type, slot).length > 0; }
+  mineTier(): number { return 0; }
+  mineAtCap() { return false; }
+  canMerge(type: WeaponType, slot?: WeaponSlot) {
+    if (slot === "segment") return false;
+    return this.mergeTargets(type, "head").length > 0;
+  }
   mergePreviewTier(type: WeaponType, slot?: WeaponSlot) {
     const match = this.mergeTargets(type, slot)[0];
     return match ? Math.min(WEAPON_TIER_CAP, match.tier + 1) : 1;
@@ -273,11 +276,10 @@ export class SnakePlayer {
     else if (this.bard.anims.isPlaying) { this.bard.stop(); this.bard.setFrame(BARD_IDLE_FRAME); }
   }
   private mergeTargets(type: WeaponType, slot?: WeaponSlot) {
+    if (slot === "segment") return [];
     return this.weapons.filter((w) => {
       if (w.type !== type || w.tier >= WEAPON_TIER_CAP) return false;
-      if (slot === "head") return w.segmentIndex < 0;
-      if (slot === "segment") return w.segmentIndex >= 0;
-      return true;
+      return w.segmentIndex < 0;
     }).sort((a, b) => a.tier - b.tier);
   }
   private grantHeadWeapon(type: WeaponType): "merged" | "added" {
@@ -288,13 +290,8 @@ export class SnakePlayer {
     this.weapons.push(w); this.attachHeadMount(type); return "added";
   }
   private grantSegmentWeapon(type: WeaponType): "merged" | "added" {
-    if (type === "mine_layer") {
-      const mine = this.weapons.find((w) => w.type === "mine_layer" && w.segmentIndex >= 0);
-      if (mine) { if (mine.tier < WEAPON_TIER_CAP) { bumpTier(mine); this.paintTier(mine); } return "merged"; }
-    }
-    const existing = this.mergeTargets(type, "segment")[0];
-    if (existing) { bumpTier(existing); this.paintTier(existing); return "merged"; }
-    this.addArmedSegment(type); return "added";
+    this.addArmedSegment(type);
+    return "added";
   }
   private spawnSegment() {
     this.ensureSegTexture();
@@ -420,18 +417,34 @@ export class SnakePlayer {
         this.fire({ kind: "mortar", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.mortar, radius: 7, tx: target.x, ty: target.y, aoe });
         w.lastFired = now; continue;
       }
-      if (w.type === "single_shot") this.fire({ kind: "bullet", x: origin.x + ux * 16, y: origin.y + uy * 16, vx: ux * SHOT_SPEED, vy: uy * SHOT_SPEED, damage: dmg, color: COLOR.singleShot, radius: 4, hitSpark: true });
-      else if (w.type === "cone_burst") {
-        const pellets = 3 + Math.max(0, w.tier); const mid = (pellets - 1) / 2;
+      if (w.type === "single_shot") {
+        const shots = w.segmentIndex < 0 ? Math.max(1, w.tier) : 1;
+        const mid = (shots - 1) / 2;
+        const spread = shots > 1 ? 0.1 : 0;
+        for (let i = 0; i < shots; i++) {
+          const a = angle + (i - mid) * spread;
+          this.fire({ kind: "bullet", x: origin.x + Math.cos(a) * 16, y: origin.y + Math.sin(a) * 16, vx: Math.cos(a) * SHOT_SPEED, vy: Math.sin(a) * SHOT_SPEED, damage: dmg, color: COLOR.singleShot, radius: 4, hitSpark: true });
+        }
+      } else if (w.type === "cone_burst") {
+        const pellets = w.segmentIndex < 0 ? 3 * Math.max(1, w.tier) : 3;
+        const mid = (pellets - 1) / 2;
+        const spread = pellets > 5 ? CONE_SPREAD * 0.72 : CONE_SPREAD;
         for (let i = 0; i < pellets; i++) {
-          const a = angle + (i - mid) * CONE_SPREAD;
+          const a = angle + (i - mid) * spread;
           this.fire({ kind: "bullet", x: origin.x + Math.cos(a) * 14, y: origin.y + Math.sin(a) * 14, vx: Math.cos(a) * CONE_SPEED, vy: Math.sin(a) * CONE_SPEED, damage: dmg, color: COLOR.coneBurst, radius: 3.5 });
         }
       } else if (w.type === "railgun") this.fire({ kind: "bullet", x: origin.x + ux * 18, y: origin.y + uy * 18, vx: ux * RAIL_SPEED, vy: uy * RAIL_SPEED, damage: dmg, color: COLOR.rail, radius: 3, pierce: true });
       else if (w.type === "chain_lightning") this.fire({ kind: "chain", x: origin.x, y: origin.y, vx: ux * 640, vy: uy * 640, damage: dmg, color: COLOR.chain, radius: 6, bounces: CHAIN_BOUNCES, bounceRadius: CHAIN_RADIUS });
       else {
-        this.playSlash(origin.x, origin.y, angle, range, SLASH_ARC);
-        this.fire({ kind: "slash", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.meleeSlash, radius: range, angle, range, arc: SLASH_ARC });
+        const hits = w.segmentIndex < 0 ? Math.max(1, w.tier) : 1;
+        const arc = SLASH_ARC * (1 + (hits - 1) * 0.32);
+        const slashRange = range * (1 + (hits - 1) * 0.1);
+        for (let i = 0; i < hits; i++) {
+          const off = hits > 1 ? (i - (hits - 1) / 2) * 0.38 : 0;
+          const slashAngle = angle + off;
+          this.playSlash(origin.x, origin.y, slashAngle, slashRange, arc);
+          this.fire({ kind: "slash", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.meleeSlash, radius: slashRange, angle: slashAngle, range: slashRange, arc });
+        }
       }
       w.lastFired = now;
     }
