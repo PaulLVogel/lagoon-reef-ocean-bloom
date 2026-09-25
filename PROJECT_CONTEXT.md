@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Infinite train + head multi-shot** — segment weapons always append a new car (no merge, no mine cap, no length cap). Head weapons still merge to T3 and scale multi-shot / cone pellets / slash fans. Shop and level-up always keep segment cards in the pool. Mines stay 2s fuse + 3s cadence per car.
+Last shipped: **Looping fantasy floor** (`f50916f`) on top of infinite train + head multi-shot. Arena is no longer a flat `COLOR.arena` fill. `MainScene.ensureFantasyBackground()` generates a 256×256 moss/stone tile (`fantasyBackground`) then a viewport `TileSprite` locked to the camera. Segment weapons still always append a new car. Head weapons still merge to T3. Mines stay 2s fuse + 3s cadence per car.
 
 ### 0.3 Segment / hostile physics (do not regress)
 
@@ -43,6 +43,7 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 - When pushing: send **entire** files. Prefer `gh` clone + copy + `git push` for large sources. Truncated API payloads previously shipped only section 0 of this file.
 - After shipping: keep this file and `src/game/HANDOFF.md` in lockstep, then copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 - **Infinite train (do not regress):** segment buys always `addArmedSegment`. Never merge trailing weapons. Never cap length. Never exclude `mine_layer` from shop/level pools. Head-only merge + multi-shot (T1/T2/T3 = 1/2/3 shots, cone 3/6/9, slash fans). Mine: 2s fuse + fixed 3s cadence per car.
+- **Looping fantasy floor (do not regress):** generate `fantasyBackground` with Graphics **before** creating the TileSprite. Viewport-sized `TileSprite`, `setScrollFactor(0)`, `setDepth(-1)`, origin 0,0. Each frame `tilePositionX/Y = cameras.main.scrollX/Y` (`syncBackgroundTile` from `update` + resize). Do **not** restore the old world-sized `arena-tile` floor at depth 0 — it covers the map. Do not load an extra PNG for the floor. World border + dust dots in `buildArena` stay.
 
 ### 0.2 Files that own the weapon overhaul
 
@@ -54,7 +55,9 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 | `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`; no length cap; segment cards always append |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
 | `src/game/SnakePlayer.ts` | gold diamond, head inventory + head merge/multi-shot, trail always-append, mine cadence |
-| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
+| `src/game/MainScene.ts` | fantasy TileSprite floor, mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
+| `src/game/mainSceneRestA.ts` | `update` starts with `syncBackgroundTile`; waves, shop roll, pendingBuys drain |
+| `src/game/mainSceneRestC.ts` | mines/mortar FX, level-up, `buildArena` border only (no old arena-tile) |
 | `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
 | `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
