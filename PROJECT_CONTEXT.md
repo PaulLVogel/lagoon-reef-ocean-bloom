@@ -14,7 +14,7 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Siege/boss shot vs trail** — hostiles get Arcade circle bodies and join `hostileGroup`; overlap + manual fallback damage living segments and destroy the red ball; dead cars pass shots through. Segment group + `updateFromGameObject` already live. Goblin grunt / Death Slime / shop cart unchanged. Commit `a21498e`. Live READY.
+Last shipped: **Infinite train + head multi-shot** — segment weapons always append a new car (no merge, no mine cap, no length cap). Head weapons still merge to T3 and scale multi-shot / cone pellets / slash fans. Shop and level-up always keep segment cards in the pool. Mines stay 2s fuse + 3s cadence per car.
 
 ### 0.3 Segment / hostile physics (do not regress)
 
@@ -42,6 +42,7 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 - Mortar impact is the **8×64×64** fireball (`vs-mortar-boom`). Never restore the 10-frame 128×80 sheet.
 - When pushing: send **entire** files. Prefer `gh` clone + copy + `git push` for large sources. Truncated API payloads previously shipped only section 0 of this file.
 - After shipping: keep this file and `src/game/HANDOFF.md` in lockstep, then copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
+- **Infinite train (do not regress):** segment buys always `addArmedSegment`. Never merge trailing weapons. Never cap length. Never exclude `mine_layer` from shop/level pools. Head-only merge + multi-shot (T1/T2/T3 = 1/2/3 shots, cone 3/6/9, slash fans). Mine: 2s fuse + fixed 3s cadence per car.
 
 ### 0.2 Files that own the weapon overhaul
 
@@ -49,12 +50,11 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 |---|---|
 | `src/game/Weapon.ts` | HEAD/SEGMENT pools, mortar, `WeaponSlot`, mine cadence, colors |
 | `src/game/constants.ts` | gold head, mortar/rail/chain colors, **MORTAR_FX_*** 64×64×8 @ 12fps, **SHOT_HIT_***, **GOBLIN_*** / **SLIME_*** |
-| `src/game/stats.ts` | level offers with `weaponSlot`, mine T3 exclude |
-| `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`, mine T3 filter, slot labels |
+| `src/game/stats.ts` | level offers with `weaponSlot`; segment weapons always in pool |
+| `src/game/shop.ts` | `add_head_weapon` vs `add_blaster`; no length cap; segment cards always append |
 | `src/game/runtime.ts` | `pendingWeaponSlot` + `pendingBuys` queue |
-| `src/game/SnakePlayer.ts` | gold diamond, head inventory (negative `segmentIndex`), `segmentGroup`, mine CDR ignore, mortar freeze |
-| `src/game/MainScene.ts` | `foes`/`hostileGroup` overlaps, mines, mortar, **pendingBuys drain** |
-| `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
+| `src/game/SnakePlayer.ts` | gold diamond, head inventory + head merge/multi-shot, trail always-append, mine cadence |
+| `src/game/MainScene.ts` | mine 2s fuse, mortar shells + `playMortarExplosion`, **pendingBuys drain**, shop apply with slot |
 | `src/game/mortarExplosionAsset.ts` | 8×64 fireball data URI (`MORTAR_EXPLOSION_URL`) |
 | `src/game/shotHitAsset.ts` | 5×32 single-shot spark data URI (`SHOT_HIT_URL`) |
 | `src/components/game-overlay.tsx` | Head Upgrade / New Segment badges |
