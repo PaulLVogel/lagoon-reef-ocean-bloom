@@ -52,6 +52,14 @@ export const GOBLIN_FRAMES = 4;
 export const GOBLIN_FPS = 8;
 export const GOBLIN_SCALE = 2.25;
 
+/** Flanker: 4-frame 16×16 Goblin Fanatic walk. */
+export const FANATIC_SHEET = "vs-fanatic";
+export const FANATIC_ANIM = "vs-fanatic-walk";
+export const FANATIC_FRAME = 16;
+export const FANATIC_FRAMES = 4;
+export const FANATIC_FPS = 8;
+export const FANATIC_SCALE = 2.25;
+
 /** Mortar impact: 8-frame 64×64 fireball sheet (user-provided). */
 export const MORTAR_FX_SHEET = "vs-mortar-fx";
 export const MORTAR_FX_ANIM = "vs-mortar-boom";
