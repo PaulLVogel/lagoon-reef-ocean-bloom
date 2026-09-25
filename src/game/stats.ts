@@ -10,7 +10,6 @@ import {
   HEAD_WEAPONS,
   SEGMENT_WEAPONS,
   WEAPON_LABEL,
-  WEAPON_TIER_CAP,
   type WeaponSlot,
   type WeaponType,
 } from "./Weapon";
@@ -93,8 +92,7 @@ export type LevelOwned = {
   mineTier?: number;
 };
 
-export function rollLevelOffers(seed = Date.now(), owned: LevelOwned = {}): LevelOffer[] {
-  const mineCap = (owned.mineTier ?? 0) >= WEAPON_TIER_CAP;
+export function rollLevelOffers(seed = Date.now(), _owned: LevelOwned = {}): LevelOffer[] {
   const pool: LevelOffer[] = [
     ...GLOBAL_STAT_CATALOG.map((item) => ({
       id: `${item.stat}-lv-${seed}`,
@@ -107,17 +105,14 @@ export function rollLevelOffers(seed = Date.now(), owned: LevelOwned = {}): Leve
       weaponType: type,
       weaponSlot: "head" as const,
       title: `Head Upgrade: ${WEAPON_LABEL[type]}`,
-      blurb: `Attach ${WEAPON_LABEL[type].toLowerCase()} to the head, or merge if the head already has it.`,
+      blurb: `Attach ${WEAPON_LABEL[type].toLowerCase()} to the head, or merge if the head already has it (multi-shot scales with tier).`,
     })),
-    ...SEGMENT_WEAPONS.filter((type) => !(type === "mine_layer" && mineCap)).map((type) => ({
+    ...SEGMENT_WEAPONS.map((type) => ({
       id: `wpn-seg-${type}-lv-${seed}`,
       weaponType: type,
       weaponSlot: "segment" as const,
       title: `New Segment: ${WEAPON_LABEL[type]}`,
-      blurb:
-        type === "mine_layer"
-          ? "Only one Mine layer is allowed. Duplicate picks upgrade its tier up to 3."
-          : `Grow a ${WEAPON_LABEL[type].toLowerCase()} segment, or merge if you already own it.`,
+      blurb: `Always grow a new ${WEAPON_LABEL[type].toLowerCase()} car. Duplicates stack; no merge cap.`,
     })),
   ];
   const out: LevelOffer[] = [];
