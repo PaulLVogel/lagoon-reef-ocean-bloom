@@ -80,7 +80,7 @@ export function installMainSceneRestA(proto: any) {
           }
         }
         this.shots.update(dt, (x, y, dmg, r, mark, pierce) => this.hitEnemiesAt(x, y, dmg, r, mark, pierce));
-        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
+        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkSelfCollision(time); if (this.dead) return; this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
       }
     }
     this.hudAcc += delta;

@@ -10,7 +10,22 @@ export const MOBILE_WIDTH = 820;
 
 export const HEAD_RADIUS = 16;
 export const SEGMENT_RADIUS = 13;
-export const HISTORY_STRIDE = 7;
+/** Trail: each segment sits this many px of path (arc length) behind the one ahead. Frame-rate independent. */
+export const SEGMENT_SPACING = 28;
+/** Trail: a new positionHistory point is committed once the head has moved this far from the last one. */
+export const HISTORY_MIN_STEP = 4;
+/** Self-collision: the first N segments behind the head never count (they always touch it). */
+export const SELF_HIT_IGNORE_SEGMENTS = 2;
+/** Self-collision: head/segment overlap uses (HEAD_RADIUS + SEGMENT_RADIUS) × this, so grazes don't count. */
+export const SELF_HIT_RADIUS_MUL = 0.72;
+/** Self-collision: flat head damage (not reduced by armor; it is self-inflicted). */
+export const SELF_HIT_DAMAGE = 6;
+/** Self-collision: minimum time between two self-hits. */
+export const SELF_HIT_COOLDOWN_MS = 900;
+/** Self-collision: input ignored for this long while the head is knocked back. */
+export const SELF_HIT_STUN_MS = 220;
+/** Self-collision: initial knockback speed (px/s), decays to 0 over the stun. */
+export const SELF_HIT_KNOCKBACK = 460;
 export const DEFAULT_SEGMENT_COUNT = 0;
 export const BASE_SPEED = 240;
 export const PLAYER_MAX_HP = 100;

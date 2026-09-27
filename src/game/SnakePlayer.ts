@@ -6,13 +6,19 @@ import {
   COLOR,
   DEFAULT_SEGMENT_COUNT,
   HEAD_RADIUS,
-  HISTORY_STRIDE,
+  HISTORY_MIN_STEP,
   PICKUP_RADIUS_BASE,
   PICKUP_RADIUS_STEP,
   PLAYER_IFRAME_MS,
   PLAYER_MAX_HP,
   SEGMENT_MAX_HP,
   SEGMENT_RADIUS,
+  SEGMENT_SPACING,
+  SELF_HIT_COOLDOWN_MS,
+  SELF_HIT_IGNORE_SEGMENTS,
+  SELF_HIT_KNOCKBACK,
+  SELF_HIT_RADIUS_MUL,
+  SELF_HIT_STUN_MS,
   STAT_ARMOR_STEP,
   STAT_CDR_MUL,
   STAT_DMG_MUL,
@@ -88,7 +94,11 @@ export class SnakePlayer {
   damageMul = 1;
   cooldownMul = 1;
   private readonly scene: Phaser.Scene;
-  private readonly historyStride: number;
+  /** Self-collision knockback: input is ignored until this time and the head slides on kbVx/kbVy. */
+  private stunUntil = 0;
+  private kbVx = 0;
+  private kbVy = 0;
+  private selfHitReadyAt = 0;
   private readonly headGlow: Phaser.GameObjects.Arc;
   private readonly pickupRing: Phaser.GameObjects.Arc;
   private readonly mounts: Phaser.GameObjects.Container;
@@ -99,7 +109,6 @@ export class SnakePlayer {
 
   constructor(scene: Phaser.Scene, x: number, y: number, fire: (ev: FireEvent) => void, segmentCount = DEFAULT_SEGMENT_COUNT) {
     this.scene = scene;
-    this.historyStride = HISTORY_STRIDE;
     this.fire = fire;
     this.segmentGroup = scene.physics.add.group({ allowGravity: false, immovable: true });
     this.head = scene.add.container(x, y);
@@ -130,8 +139,9 @@ export class SnakePlayer {
       const barrel = scene.add.rectangle(HEAD_RADIUS + 2, 0, 11, 3.5, COLOR.singleShot);
       this.head.add([this.pickupRing, this.headGlow, diamond, snout, eyeY, eyeX, barrel, this.mounts]);
     }
-    const maxHistory = (Math.max(segmentCount, 4) + 4) * this.historyStride + 48;
-    for (let i = maxHistory - 1; i >= 0; i--) this.positionHistory.push({ x: x - i * 3.2, y });
+    // Seed a straight trail behind the head (oldest first), long enough for the starting body.
+    const seedLength = this.trailLengthFor(Math.max(segmentCount, 4));
+    for (let d = seedLength; d > 0; d -= HISTORY_MIN_STEP) this.positionHistory.push({ x: x - d, y });
     this.weapons.push(makeWeapon("single_shot", this.headWeaponSeq, 1));
     for (let i = 0; i < segmentCount; i++) this.addArmedSegment(randomSegmentWeaponType());
     this.layoutSegments();
@@ -246,23 +256,66 @@ export class SnakePlayer {
     for (const s of this.body) { s.hp = s.maxHp; s.isActive = true; s.lastHit = 0; s.segmentSprite.clearTint(); s.segmentSprite.setTint(s.baseTint); }
   }
   update(dt: number, ax: number, ay: number, now: number, enemies: EnemyScan[], combatOn: boolean) {
-    const moving = ax !== 0 || ay !== 0;
+    const stunned = now < this.stunUntil;
+    const moving = !stunned && (ax !== 0 || ay !== 0);
     const drag = this.deadWeightMul();
-    if (moving) {
+    if (stunned) {
+      // Knockback slides the head; it decays linearly to 0 over the stun.
+      const k = (this.stunUntil - now) / SELF_HIT_STUN_MS;
+      this.vx = this.kbVx * k; this.vy = this.kbVy * k;
+    } else if (moving) {
       this.facing = Math.atan2(ay, ax);
       this.vx = ax * this.speed * drag; this.vy = ay * this.speed * drag;
+    } else { this.vx = 0; this.vy = 0; }
+    if (this.vx !== 0 || this.vy !== 0) {
       const nextX = Phaser.Math.Clamp(this.head.x + this.vx * dt, HEAD_RADIUS + 8, WORLD_SIZE - HEAD_RADIUS - 8);
       const nextY = Phaser.Math.Clamp(this.head.y + this.vy * dt, HEAD_RADIUS + 8, WORLD_SIZE - HEAD_RADIUS - 8);
       this.head.setPosition(nextX, nextY);
-      this.positionHistory.push({ x: nextX, y: nextY });
-      this.trimHistory();
-    } else { this.vx = 0; this.vy = 0; }
+      this.recordHead();
+    }
     this.syncBard(moving);
     if (!this.bard) this.head.setRotation(this.facing); else this.head.setRotation(0);
     this.mounts.setRotation(this.facing);
     this.headGlow.setScale(1 + Math.sin(this.scene.time.now / 280) * 0.04);
     this.layoutSegments(); this.syncAuras();
     if (combatOn) this.tickWeapons(now, enemies);
+  }
+  get stunned() { return this.scene.time.now < this.stunUntil; }
+  canSelfHit(now: number) { return now >= this.selfHitReadyAt; }
+  /** First segment (past the ignored neck) the head overlaps, or -1. Greyed cars count: they keep their hitbox. */
+  selfHitIndex(): number {
+    const r = (HEAD_RADIUS + SEGMENT_RADIUS) * SELF_HIT_RADIUS_MUL, r2 = r * r;
+    const hx = this.head.x, hy = this.head.y;
+    for (let i = SELF_HIT_IGNORE_SEGMENTS; i < this.segments.length; i++) {
+      const seg = this.segments[i]!;
+      const dx = seg.x - hx, dy = seg.y - hy;
+      if (dx * dx + dy * dy < r2) return i;
+    }
+    return -1;
+  }
+  /** Start the self-hit knockback/stun/cooldown away from segment `index`, with head + segment flash. */
+  knockFromSegment(index: number, now: number) {
+    const seg = this.segments[index];
+    let dx = seg ? this.head.x - seg.x : 0, dy = seg ? this.head.y - seg.y : 0;
+    let mag = Math.hypot(dx, dy);
+    if (mag < 0.001) { dx = -Math.cos(this.facing); dy = -Math.sin(this.facing); mag = 1; }
+    this.kbVx = (dx / mag) * SELF_HIT_KNOCKBACK; this.kbVy = (dy / mag) * SELF_HIT_KNOCKBACK;
+    this.stunUntil = now + SELF_HIT_STUN_MS;
+    this.selfHitReadyAt = now + SELF_HIT_COOLDOWN_MS;
+    this.headGlow.setFillStyle(0xff7a2f, 0.7); this.head.setScale(1.12);
+    this.bard?.setTint(0xffb080);
+    this.scene.time.delayedCall(SELF_HIT_STUN_MS, () => {
+      if (!this.head.active) return;
+      this.headGlow.setFillStyle(COLOR.head, 0.16); this.head.setScale(1); this.bard?.clearTint();
+    });
+    const state = this.body[index];
+    if (state) {
+      state.segmentSprite.setTintFill(0xffffff);
+      this.scene.time.delayedCall(140, () => {
+        if (!state.sprite.active) return;
+        state.segmentSprite.clearTint(); state.segmentSprite.setTint(state.isActive ? state.baseTint : DEAD_TINT);
+      });
+    }
   }
   destroy() {
     this.head.destroy(true); this.headAuraRing?.destroy();
@@ -455,29 +508,77 @@ export class SnakePlayer {
     g.lineStyle(2.4, 0xfff4c8, 0.95); g.beginPath(); g.arc(0, 0, range * 0.92, angle - arc / 2, angle + arc / 2, false); g.strokePath();
     this.scene.tweens.add({ targets: g, alpha: 0, scaleX: 1.12, scaleY: 1.12, duration: 170, ease: "Cubic.easeOut", onComplete: () => g.destroy() });
   }
+  /**
+   * Distance-based trail: segment i sits (i + 1) × SEGMENT_SPACING px of path behind the head,
+   * walking head → newest → oldest positionHistory point and interpolating inside each piece.
+   * Spacing no longer depends on frame rate or speed.
+   */
   private layoutSegments() {
-    const hist = this.positionHistory; if (hist.length === 0) return;
-    const last = hist.length - 1;
+    const hist = this.positionHistory;
+    let ax = this.head.x, ay = this.head.y; // start of the current path piece
+    let aheadX = ax, aheadY = ay; // previous car (or head), for rotation
+    let walked = 0; // path length from head to (ax, ay)
+    let idx = hist.length - 1;
     for (let i = 0; i < this.segments.length; i++) {
-      const framesBehind = (i + 1) * this.historyStride;
-      const pos = hist[Math.max(0, last - framesBehind)]!;
+      const target = (i + 1) * SEGMENT_SPACING;
+      let px = ax, py = ay;
+      while (idx >= 0) {
+        const b = hist[idx]!;
+        const len = Math.hypot(b.x - ax, b.y - ay);
+        if (len > 0 && walked + len >= target) {
+          const t = (target - walked) / len;
+          px = ax + (b.x - ax) * t; py = ay + (b.y - ay) * t;
+          break;
+        }
+        walked += len; ax = b.x; ay = b.y; px = ax; py = ay; idx--;
+      }
       const seg = this.segments[i]!;
-      seg.setPosition(pos.x, pos.y);
-      const ahead = hist[Math.max(0, last - i * this.historyStride)]!;
-      const ang = Math.atan2(ahead.y - pos.y, ahead.x - pos.x);
-      if (Number.isFinite(ang)) seg.setRotation(ang);
+      seg.setPosition(px, py);
+      const ang = Math.atan2(aheadY - py, aheadX - px);
+      if (Number.isFinite(ang) && (aheadX !== px || aheadY !== py)) seg.setRotation(ang);
+      aheadX = px; aheadY = py;
       const body = seg.body as Phaser.Physics.Arcade.Body | undefined;
       if (body) body.updateFromGameObject();
     }
   }
-  private ensureHistoryCapacity() {
-    const needed = (this.segments.length + 4) * this.historyStride + 48;
-    const oldest = this.positionHistory[0] ?? { x: this.head.x, y: this.head.y };
-    while (this.positionHistory.length < needed) this.positionHistory.unshift({ ...oldest });
+  /** Path length the history must cover for `count` segments (plus slack). */
+  private trailLengthFor(count: number) { return (count + 4) * SEGMENT_SPACING + 48; }
+  /** Commit the head as a new history point once it has moved HISTORY_MIN_STEP px. */
+  private recordHead() {
+    const last = this.positionHistory[this.positionHistory.length - 1];
+    if (last && Math.hypot(this.head.x - last.x, this.head.y - last.y) < HISTORY_MIN_STEP) return;
+    this.positionHistory.push({ x: this.head.x, y: this.head.y });
+    this.trimHistory();
   }
+  /** Path length from the head back to the oldest history point. */
+  private historyLength() {
+    const hist = this.positionHistory;
+    let len = 0, px = this.head.x, py = this.head.y;
+    for (let i = hist.length - 1; i >= 0; i--) { const p = hist[i]!; len += Math.hypot(p.x - px, p.y - py); px = p.x; py = p.y; }
+    return len;
+  }
+  /** New cars append at the tail: extend the oldest end of the path straight back if it is too short. */
+  private ensureHistoryCapacity() {
+    const missing = this.trailLengthFor(this.segments.length) - this.historyLength();
+    if (missing <= 0) return;
+    const hist = this.positionHistory;
+    const oldest = hist[0] ?? { x: this.head.x, y: this.head.y };
+    let dx = -Math.cos(this.facing), dy = -Math.sin(this.facing);
+    for (let i = 1; i <= hist.length; i++) {
+      const p = i < hist.length ? hist[i]! : { x: this.head.x, y: this.head.y };
+      const m = Math.hypot(oldest.x - p.x, oldest.y - p.y);
+      if (m > 0.001) { dx = (oldest.x - p.x) / m; dy = (oldest.y - p.y) / m; break; }
+    }
+    hist.unshift({ x: oldest.x + dx * missing, y: oldest.y + dy * missing });
+  }
+  /** Drop history older than the body needs (keeps one point past the limit for interpolation). */
   private trimHistory() {
-    const max = (this.segments.length + 4) * this.historyStride + 48;
-    const extra = this.positionHistory.length - max;
-    if (extra > 0) this.positionHistory.splice(0, extra);
+    const hist = this.positionHistory;
+    const max = this.trailLengthFor(this.segments.length);
+    let len = 0, px = this.head.x, py = this.head.y;
+    for (let i = hist.length - 1; i >= 0; i--) {
+      const p = hist[i]!; len += Math.hypot(p.x - px, p.y - py); px = p.x; py = p.y;
+      if (len > max) { if (i > 0) hist.splice(0, i); return; }
+    }
   }
 }

@@ -16,7 +16,7 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 7. After shipping: update this file + `PROJECT_CONTEXT.md` and copy both into `artifacts/` **and** `artifacts/lagoon-reef-ocean-bloom/` **and** `src/game/HANDOFF.md`.
 
 8. Shop cart is live: `pickShopOffer` toggles `shopCart` only (deselect allowed). **Buy** (`requestBuyCart`) moves cart → `shopBought` + `pendingBuys`. **Next Wave** (`requestNextWave`) does **not** purchase leftover cart items. **`MainScene` must drain the whole `pendingBuys` queue each shop frame** (fall back to a single `pendingUpgrade` only if the queue is empty). Do **not** revert to applying one buy per frame or folding Buy into Next Wave.
-9. **Flanker** is in the base horde pool (waves 1–4+). **Tangled** overlap penalty is still **not** in this repo. Do not invent Tangled unless named.
+9. **Flanker** is in the base horde pool (waves 1–4+). The self-overlap penalty now exists as **self-collision / "SELF-BITE"** (rule 18). Do not add a second, separate "Tangled" mechanic unless named.
 10. Push with **full file bodies**. Truncated `PROJECT_CONTEXT.md` previously left GitHub with only section 0. Prefer `gh`/git over pasted API payloads when files are large.
 11. `SnakePlayer.areaOfEffect` (default 1) scales mortar blast radius. There is **no** shop/level stat that raises it yet — do not invent one unless asked.
 12. Mortar boom is the **8-frame 64×64** fireball. Do **not** revert `MORTAR_FX_FRAME_*` to 128×80 / 10 frames. Do not invent extra VFX sheets unless asked.
@@ -25,11 +25,15 @@ Do **not** use `PaulLVogel/vampire-snake` or `vampire-snake.vercel.app` for new 
 15. **Infinite train:** `grantSegmentWeapon` always `addArmedSegment`. Do **not** restore segment merge, mine uniqueness, mine T3 pool removal, or `MAX_SEGMENTS = 14`. Head merge + multi-shot stays. Mine fuse 2s / cadence 3s per car. Shop and level-up must keep offering segment weapons.
 16. **Looping fantasy floor:** `MainScene.ensureFantasyBackground()` draws a 256×256 moss/stone tile (`0x112211` base, `0x224422` grid, faint cobble) and `generateTexture('fantasyBackground')` **before** the TileSprite exists. Viewport `TileSprite` at (0,0), `setScrollFactor(0)`, `setDepth(-1)`. `syncBackgroundTile()` sets `tilePositionX/Y` to `cameras.main.scrollX/Y` every frame and on resize. `buildArena` must **not** recreate the old world-sized `arena-tile` floor. No extra floor PNG.
 
-Last shipped: **Looping fantasy floor** (`f50916f`) — camera-locked TileSprite moss/stone grid. Infinite train + head multi-shot still live. Mine layer uncapped (2s fuse, 3s cadence each).
+17. **Distance-based trail (Paul approved overriding the old "stride only" rule):** `positionHistory` is still the trail, but a point is committed only after the head moves `HISTORY_MIN_STEP` (4 px), and segment *i* sits `(i + 1) × SEGMENT_SPACING` (28 px) of **path length** behind the head, interpolated between points (`layoutSegments`). Spacing no longer changes with frame rate or move speed (the old `HISTORY_STRIDE = 7` gave 55 px gaps at 30 Hz, 28 px at 60 Hz, 12 px at 144 Hz). Trim/extend by path length (`trimHistory`, `ensureHistoryCapacity` extends the tail straight back). Do **not** go back to a fixed number of history points per segment.
+18. **Self-collision ("SELF-BITE"):** `MainScene.checkSelfCollision` (restB, called in the combat loop before `checkPlayerContact`) asks `SnakePlayer.selfHitIndex()`: head overlapping any segment from index `SELF_HIT_IGNORE_SEGMENTS` (2) on, using `(HEAD_RADIUS + SEGMENT_RADIUS) × SELF_HIT_RADIUS_MUL`. Greyed cars count (they keep their hitbox). Hit = flat `SELF_HIT_DAMAGE` (6) to head HP (no armor, no i-frames granted), `knockFromSegment` → knockback away from that car (`SELF_HIT_KNOCKBACK` px/s decaying over `SELF_HIT_STUN_MS` 220 ms, input ignored), `SELF_HIT_COOLDOWN_MS` 900 ms before the next self-hit. Feedback: orange camera flash + small shake, head glow/bard tint orange, hit car flashes white, orange ring burst, floating `SELF-BITE -6`, low thud. Only while `combatOn` (not in the shop/wave-clear roam). Can kill you (head HP). Tune via the `SELF_HIT_*` constants.
+
+Last shipped: **Distance-based trail + self-collision** (Claude, branch `claude/task-6-self-collision`, awaiting Paul's merge). Before that: looping fantasy floor (`f50916f`). Infinite train + head multi-shot still live. Mine layer uncapped (2s fuse, 3s cadence each).
 
 ## Rules
 
-- Segments: `positionHistory` only (`HISTORY_STRIDE = 7`). Append **only while moving**. No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
+- Segments: `positionHistory` only, **distance-based** (`SEGMENT_SPACING = 28` px of path per car, point committed every `HISTORY_MIN_STEP = 4` px). Append **only while the head actually moves** (pushing into a wall adds nothing). No Arcade velocity / `moveToObject` / pathfinding on the trail. Greyed-out (0 HP) segments still trail the same way.
+- Self-collision: head vs own body past the first 2 cars → `SELF-BITE` (see rule 18).
 - Segment HP: starts at 100 (`segmentMaxHp` grows with Max HP stat). `isActive` false at 0 (no fire, tint `0x555555`). Logic stays; **do not draw floating health bars**. `reviveAll()` / `fullHeal()` restore HP. Dead segments do not take more damage. Head contact damages player HP; segment contact damages that segment only. Armor is flat reduction (`mitigate`, min 1).
 - Start loadout: `DEFAULT_SEGMENT_COUNT = 0`. The **head** starts with `single_shot` and can stack more **HEAD WEAPONS** (`aura` / `melee_slash` / `cone_burst` / `single_shot`) without growing segments. Trailing segments only roll **SEGMENT WEAPONS** (`railgun` / `chain_lightning` / `mine_layer` / `single_shot` / `mortar`) at 1-to-1.
 - Segment weapons: each trailing **active** segment holds **exactly one** `Weapon`. Targeting and shots use **that origin (x, y)**. Dead segments do not fire. Head weapons all fire from the diamond. No orbiting extras.
@@ -47,12 +51,12 @@ Last shipped: **Looping fantasy floor** (`f50916f`) — camera-locked TileSprite
 
 | Path | Owns |
 |---|---|
-| `src/game/SnakePlayer.ts` | head, trail, `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, head merge + multi-shot, segment append |
+| `src/game/SnakePlayer.ts` | head, distance-based trail, self-hit query + knockback/stun (`selfHitIndex`, `knockFromSegment`), `segmentGroup`, bodies + `updateFromGameObject`, HP/grey-out, `deadWeightMul`, head merge + multi-shot, segment append |
 | `src/game/Weapon.ts` | 8 types (head + segment pools + mortar), `WeaponSlot`, mine cadence, `FireEvent` mortar |
 | `src/game/MainScene.ts` | fantasy TileSprite floor, FIT zoom, `foes`/`hostileGroup` overlaps, mines, mortar, shot-hit, **pendingBuys drain** |
 | `src/game/mainSceneRestA.ts` | `update` + `syncBackgroundTile`, waves, shop roll |
 | `src/game/mainSceneRestC.ts` | mines/mortar FX, level-up, `buildArena` border only |
-| `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody` |
+| `src/game/mainSceneRestB.ts` | `spawnHostile`, `tickHostiles`, `handleSegmentDamage`, `armEnemyBody`, `checkSelfCollision` + `playThud` |
 | `src/game/mortarExplosionAsset.ts` | `MORTAR_EXPLOSION_URL` data URI for the 8×64 fireball sheet |
 | `src/game/shotHitAsset.ts` | `SHOT_HIT_URL` data URI for the 5×32 single-shot spark |
 | `src/game/slimeAsset.ts` | `SLIME_URL` data URI for the 4×16 Death Slime walk |
@@ -63,7 +67,7 @@ Last shipped: **Looping fantasy floor** (`f50916f`) — camera-locked TileSprite
 | `src/game/Enemy.ts` | horde kinds + boss; slime swarmer + goblin grunt walk sprites; flanker orbit, charger dash, siege tail bolts |
 | `src/game/Projectiles.ts` | player bullet pool + `clear()` |
 | `src/game/runtime.ts` | HUD snap + XP/level fields, `pickLevelOffer()`, `pendingBuys` queue, shop lock/reroll/next |
-| `src/game/constants.ts` | world, zoom, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_***, **SLIME_***, **GOBLIN_*** |
+| `src/game/constants.ts` | world, zoom, `SEGMENT_SPACING` / `HISTORY_MIN_STEP`, `SELF_HIT_*`, XP curve, stat steps, gem/weapon colors, **MORTAR_FX_*** (64×64×8 @ 12fps), **SHOT_HIT_***, **SLIME_***, **GOBLIN_*** |
 | `src/game/createGame.ts` | Phaser.Game with `Scale.FIT` + `CENTER_BOTH` |
 | `src/components/game-overlay.tsx` | start / HUD / XP / level-up menu / death / shop + Lock |
 | `src/components/game-canvas.tsx` | Phaser host; canvas must not `h-full w-full` (breaks FIT letterbox) |

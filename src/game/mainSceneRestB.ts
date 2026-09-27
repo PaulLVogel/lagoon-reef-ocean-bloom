@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import {
   COLOR, COMBO_TRIGGER, COMBO_WINDOW_MS, ENEMY_RADIUS,
   ERA_BOSS_DMG_MUL, ERA_BOSS_HP_MUL, GOLD_TALLY_MS,
-  PLAYER_IFRAME_MS, SEGMENT_RADIUS, WAVE_DURATION_MS, WORLD_SIZE,
+  PLAYER_IFRAME_MS, SEGMENT_RADIUS, SELF_HIT_DAMAGE, WAVE_DURATION_MS, WORLD_SIZE,
 } from "./constants";
 import { Enemy, type EnemySpec } from "./Enemy";
 import { patchHud, runtime } from "./runtime";
@@ -219,6 +219,41 @@ export function installMainSceneRestB(proto: any) {
         this.player.damageSegment(i, e.contact, now);
       }
     }
+  }
+
+  /** Self-collision: head overlapping its own body (past the neck) costs head HP, knocks back + stuns, then cools down. */
+  proto.checkSelfCollision = function(this: any, now: number) {
+    const p = this.player;
+    if (!p.canSelfHit(now)) return;
+    const index = p.selfHitIndex();
+    if (index < 0) return;
+    const seg = p.segments[index];
+    const cx = (p.x + seg.x) / 2, cy = (p.y + seg.y) / 2;
+    p.knockFromSegment(index, now);
+    this.playerHp = Math.max(0, this.playerHp - SELF_HIT_DAMAGE);
+    this.cameras.main.shake(140, 0.006);
+    this.cameras.main.flash(90, 255, 140, 40, false);
+    const ring = this.add.circle(cx, cy, 10, 0xff7a2f, 0); ring.setStrokeStyle(3, 0xffb347, 0.95); ring.setDepth(32);
+    this.tweens.add({ targets: ring, scale: 3.2, alpha: 0, duration: 260, ease: "Cubic.easeOut", onComplete: () => ring.destroy() });
+    const t = this.add.text(p.x, p.y - 26, `SELF-BITE -${SELF_HIT_DAMAGE}`, { fontFamily: "IBM Plex Mono, monospace", fontSize: "14px", color: "#ffb347", stroke: "#1a0d05", strokeThickness: 3 });
+    t.setOrigin(0.5); t.setDepth(32);
+    this.tweens.add({ targets: t, y: p.y - 58, alpha: 0, duration: 650, ease: "Cubic.easeOut", onComplete: () => t.destroy() });
+    this.playThud?.();
+    patchHud({ hp: this.playerHp });
+    if (this.playerHp <= 0) this.onDead();
+  }
+
+  proto.playThud = function(this: any) {
+    try {
+      const AC = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return; if (!this.audioCtx) this.audioCtx = new AC();
+      const ctx = this.audioCtx; if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator(), gain = ctx.createGain(); osc.type = "square";
+      osc.frequency.setValueAtTime(180, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch { /* optional */ }
   }
 
   proto.hurtPlayer = function(this: any, amount: number, now: number) {

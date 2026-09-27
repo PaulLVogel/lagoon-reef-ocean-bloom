@@ -14,7 +14,9 @@ Read this file and `src/game/HANDOFF.md` first. Then do **only** what the user a
 
 If `src/game` is missing in the App Builder workspace: copy from GitHub `main` (or `artifacts/lagoon-reef-ocean-bloom/src/game`). Do not start over.
 
-Last shipped: **Lizardfolk Gladiator armored-brute sprite** (`vs-gladiator` / `gladiatorAsset.ts`, 4×16). Kind/AI/unlock (wave 5+) unchanged. Flanker still Goblin Fanatic. Segment weapons still always append a new car. Head weapons still merge to T3. Mines stay 2s fuse + 3s cadence per car.
+Last shipped: **Distance-based trail + self-collision ("SELF-BITE")** on Claude's branch `claude/task-6-self-collision` (awaiting Paul's merge). Trail spacing is now 28 px of path per car at any frame rate; head hitting its own body past the first 2 cars costs 6 head HP, knocks back + stuns 220 ms, 900 ms cooldown. Details in HANDOFF rules 17–18.
+
+Previously shipped: **Lizardfolk Gladiator armored-brute sprite** (`vs-gladiator` / `gladiatorAsset.ts`, 4×16). Kind/AI/unlock (wave 5+) unchanged. Flanker still Goblin Fanatic. Segment weapons still always append a new car. Head weapons still merge to T3. Mines stay 2s fuse + 3s cadence per car.
 
 ### 0.3 Segment / hostile physics (do not regress)
 
@@ -22,7 +24,8 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 
 - `SnakePlayer.segmentGroup = scene.physics.add.group({ allowGravity: false, immovable: true })` in the constructor.
 - `spawnSegment`: `physics.add.existing(container)`, `setCircle(SEGMENT_RADIUS)`, `setOffset(-r,-r)`, `body.moves = false`, `container.setData("segIndex", i)`, **`segmentGroup.add(container)`**.
-- `layoutSegments`: after `setPosition`, **`(body).updateFromGameObject()`** — `body.reset` is not enough for containers moved by `positionHistory`.
+- `layoutSegments`: distance-based — car *i* at `(i + 1) × SEGMENT_SPACING` px of path behind the head, interpolated along `positionHistory` (point committed every `HISTORY_MIN_STEP` px of head movement). Frame-rate and speed independent. Never go back to a fixed history-point stride. After `setPosition`, **`(body).updateFromGameObject()`** — `body.reset` is not enough for containers moved by `positionHistory`.
+- Self-collision: `MainScene.checkSelfCollision` (restB) → `player.selfHitIndex()` (ignores first `SELF_HIT_IGNORE_SEGMENTS` cars, greyed cars count) → `player.knockFromSegment()` (knockback + stun + cooldown) and flat `SELF_HIT_DAMAGE` to head HP. Combat only.
 - `MainScene.create`: `foes` group + `hostileGroup`. Overlap `foes` ↔ `segmentGroup` (`kind: "contact"`). Overlap `hostileGroup` ↔ `segmentGroup` (`kind: "shot"`) with process callback that returns false when the car is dead (`!isActive || hp <= 0`) so shots pass through dead weight.
 - `spawnHostile` (in `mainSceneRestB.ts`): enable body, `setCircle(6)`, tag `hostileShot` / `hostileDamage`, **`hostileGroup.add(gfx)`**. Tick: move by vx/vy then `updateFromGameObject`.
 - `handleSegmentDamage` lives on restB proto (class method is a stub overwritten at install). Shot branch: `damageSegment` then `destroy()` the ball. Dead cars return immediately and must **not** eat the projectile.
@@ -37,7 +40,7 @@ Phaser **does not** watch a native JS array after `physics.add.overlap` is creat
 - Shop cart: `pickShopOffer` toggles `shopCart`. `requestBuyCart` commits the cart into `shopBought` + `pendingBuys`. `requestNextWave` starts the wave and **drops** unbought cart items. `MainScene.update` (wave-clear branch) **must drain the whole `pendingBuys` queue** each frame, then fall back to `pendingUpgrade` if empty. Do not fold Buy into Next Wave.
 - Pity uses `!(bucket.shopBought?.length)`, not cart length or `!shopPicked`.
 - `heldOffers()` copies `bucket.heldOffers[i]` first, then locked unbought `shopOffers[i]`.
-- **Flanker** is in the base spawn pool. **Tangled** is still **not** in this codebase.
+- **Flanker** is in the base spawn pool. The self-overlap penalty is implemented as self-collision ("SELF-BITE"); don't add a separate "Tangled" mechanic unless named.
 - `areaOfEffect` exists on `SnakePlayer` (default 1) and scales mortar AoE. No shop/level card raises it yet.
 - Mortar impact is the **8×64×64** fireball (`vs-mortar-boom`). Never restore the 10-frame 128×80 sheet.
 - When pushing: send **entire** files. Prefer `gh` clone + copy + `git push` for large sources. Truncated API payloads previously shipped only section 0 of this file.
