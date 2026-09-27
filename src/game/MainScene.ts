@@ -66,6 +66,8 @@ export class MainScene extends Phaser.Scene {
   private feverUntil = 0;
   /** Coiling: scene time when the next coil may fire (restB `checkCoil`). */
   coilReadyAt = 0;
+  /** Shedding: scene time when the next shed may fire (restB `tryShed`). */
+  shedReadyAt = 0;
   private unbindKeys: (() => void) | null = null;
   private floor!: Phaser.GameObjects.TileSprite;
   private backgroundTileSprite!: Phaser.GameObjects.TileSprite;
@@ -112,7 +114,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   init() {
-    this.hudAcc = 0; this.spawnAcc = 0; this.playerHp = PLAYER_MAX_HP; this.iFrameUntil = 0; this.coilReadyAt = 0;
+    this.hudAcc = 0; this.spawnAcc = 0; this.playerHp = PLAYER_MAX_HP; this.iFrameUntil = 0; this.coilReadyAt = 0; this.shedReadyAt = 0;
     this.kills = 0; this.gold = 0; this.goldDisplay = 0; this.nextWaveBank = 0; this.totalGoldEarned = 0;
     this.dead = false; this.waveClear = false; this.wave = 1; this.waveMs = WAVE_DURATION_MS;
     this.enemies = []; this.gemTimes = []; this.feverUntil = 0; this.bossSpawned = false;

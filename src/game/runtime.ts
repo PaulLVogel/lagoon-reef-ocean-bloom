@@ -27,6 +27,8 @@ export type HudSnap = {
   fever: boolean;
   /** Coiling: ms until the coil is ready (0 = ready), or -1 when the train is too short to coil. */
   coilMs: number;
+  /** Shedding: ms until a shed is ready (0 = ready), or -1 when there are no cars to shed. */
+  shedMs: number;
   combo: number;
   lastInterest: number;
   shopFrozen: boolean;
@@ -68,6 +70,8 @@ type Bucket = {
   injected: Set<string> | null;
   stickX: number;
   stickY: number;
+  /** Mobile SHED button press waiting for the scene (input.ts `consumeShed`). */
+  shedRequested: boolean;
   keys: Set<string>;
   listeners: Set<(s: HudSnap) => void>;
   leveling: boolean;
@@ -98,6 +102,7 @@ const emptyHud = (): HudSnap => ({
   shopPicked: null,
   fever: false,
   coilMs: -1,
+  shedMs: -1,
   combo: 0,
   lastInterest: 0,
   shopFrozen: false,
@@ -140,6 +145,7 @@ function emptyBucket(): Bucket {
     injected: null,
     stickX: 0,
     stickY: 0,
+    shedRequested: false,
     keys: new Set(),
     listeners: new Set(),
     leveling: false,
@@ -244,6 +250,7 @@ export function requestRestart() {
     shopCart: [],
     fever: false,
     coilMs: -1,
+    shedMs: -1,
     combo: 0,
     lastInterest: 0,
     shopFrozen: false,

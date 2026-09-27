@@ -179,6 +179,28 @@ function readGamepad(): MoveVec {
   return { x: 0, y: 0 };
 }
 
+let shedHeld = false;
+
+/** Mobile SHED button: queue one shed for the scene to consume. */
+export function requestShed() {
+  runtime().shedRequested = true;
+}
+
+/** Rising edge of E, gamepad RB/RT (buttons 5/7), or a queued mobile request. Call once per scene frame. */
+export function consumeShed(): boolean {
+  const b = runtime();
+  let held = has("KeyE");
+  if (!held) {
+    const pads = navigator.getGamepads?.() ?? [];
+    for (const pad of pads) if (pad && (pad.buttons[5]?.pressed || pad.buttons[7]?.pressed)) { held = true; break; }
+  }
+  const edge = held && !shedHeld;
+  shedHeld = held;
+  const queued = b.shedRequested;
+  b.shedRequested = false;
+  return edge || queued;
+}
+
 /** Screen-space move: x right, y down. Magnitude 0..1. */
 export function sampleMove(): MoveVec {
   const b = runtime();

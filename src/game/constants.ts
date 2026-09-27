@@ -39,6 +39,17 @@ export const COIL_BITE_GRACE_MS = 500;
 /** Coiling: damage = (BASE + PER_SEGMENT × cars in the loop) × player damage stat. */
 export const COIL_BASE_DAMAGE = 60;
 export const COIL_DAMAGE_PER_SEGMENT = 8;
+/** Shedding (E / gamepad RB or RT / mobile SHED button): ms between sheds. */
+export const SHED_COOLDOWN_MS = 6000;
+/** Shedding: a greyed car explodes for BLAST_DAMAGE × player damage stat within BLAST_RADIUS px. */
+export const SHED_BLAST_DAMAGE = 45;
+export const SHED_BLAST_RADIUS = 80;
+/** Shedding: a healthy tail car becomes a stationary turret that keeps firing its weapon this long. */
+export const SHED_TURRET_MS = 8000;
+/** Shedding: SELF-BITE is suppressed this long after a shed (cars behind a gap slide up). */
+export const SHED_BITE_GRACE_MS = 500;
+/** Shedding: cars behind a removed car slide into place over this long instead of snapping. */
+export const SHED_SLIDE_MS = 180;
 export const DEFAULT_SEGMENT_COUNT = 0;
 export const BASE_SPEED = 240;
 export const PLAYER_MAX_HP = 100;

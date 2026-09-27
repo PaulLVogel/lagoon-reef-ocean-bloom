@@ -22,6 +22,8 @@ import {
   SELF_HIT_KNOCKBACK,
   SELF_HIT_RADIUS_MUL,
   SELF_HIT_STUN_MS,
+  SHED_SLIDE_MS,
+  SHED_TURRET_MS,
   STAT_ARMOR_STEP,
   STAT_CDR_MUL,
   STAT_DMG_MUL,
@@ -65,6 +67,11 @@ export type BodySegment = {
   weaponType?: WeaponType;
 };
 
+/** A shed car left behind: keeps firing its weapon from a fixed spot until `until`. */
+export type ShedTurret = { weapon: Weapon; x: number; y: number; until: number; sprite: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Arc };
+/** What `shed()` detached, for the scene's FX / damage. */
+export type ShedResult = { x: number; y: number; kind: "explode" | "turret"; weaponType?: WeaponType };
+
 const SHOT_SPEED = 520;
 const CONE_SPEED = 400;
 const CONE_SPREAD = 0.22;
@@ -84,6 +91,8 @@ export class SnakePlayer {
   readonly body: BodySegment[] = [];
   readonly positionHistory: HistoryPoint[] = [];
   readonly weapons: Weapon[] = [];
+  /** Shed tail cars still firing from where they were dropped. */
+  readonly turrets: ShedTurret[] = [];
   areaOfEffect = 1;
   speed = BASE_SPEED;
   facing = 0;
@@ -109,6 +118,9 @@ export class SnakePlayer {
   private readonly fire: (ev: FireEvent) => void;
   private headWeaponSeq = HEAD_WEAPON_INDEX;
   private headAuraRing: Phaser.GameObjects.Arc | null = null;
+  /** After a shed, surviving cars ease from these positions to their trail spots (layoutSegments). */
+  private slideFrom = new Map<Phaser.GameObjects.Container, { x: number; y: number }>();
+  private slideStart = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, fire: (ev: FireEvent) => void, segmentCount = DEFAULT_SEGMENT_COUNT) {
     this.scene = scene;
@@ -280,8 +292,83 @@ export class SnakePlayer {
     if (!this.bard) this.head.setRotation(this.facing); else this.head.setRotation(0);
     this.mounts.setRotation(this.facing);
     this.headGlow.setScale(1 + Math.sin(this.scene.time.now / 280) * 0.04);
-    this.layoutSegments(); this.syncAuras();
+    this.layoutSegments(now); this.syncAuras(); this.expireTurrets(now);
     if (combatOn) this.tickWeapons(now, enemies);
+  }
+  /**
+   * Shedding. If any cars are greyed out, all of them detach and explode (returned as "explode").
+   * Otherwise the tail car detaches and becomes a stationary turret that keeps firing its weapon for
+   * SHED_TURRET_MS. Shed cars and their weapons are gone for good. Returns [] with no cars.
+   */
+  shed(now: number): ShedResult[] {
+    if (this.segments.length === 0) return [];
+    const greyed: number[] = [];
+    this.body.forEach((s, i) => { if (!s.isActive || s.hp <= 0) greyed.push(i); });
+    const out: ShedResult[] = [];
+    if (greyed.length > 0) {
+      for (const i of greyed) { const seg = this.segments[i]!; out.push({ x: seg.x, y: seg.y, kind: "explode" }); }
+      this.removeSegments(new Set(greyed), now, -1);
+      return out;
+    }
+    const tail = this.segments.length - 1;
+    const seg = this.segments[tail]!;
+    const w = this.weapons.find((weapon) => weapon.segmentIndex === tail);
+    out.push({ x: seg.x, y: seg.y, kind: w ? "turret" : "explode", weaponType: w?.type });
+    this.removeSegments(new Set([tail]), now, w ? tail : -1);
+    return out;
+  }
+  /** Remove cars, reindex the rest (weapons, segIndex tags, depth), and start the slide. `keepAsTurret` = index to leave behind as a turret. */
+  private removeSegments(remove: Set<number>, now: number, keepAsTurret: number) {
+    // Surviving cars remember where they are so they can ease into their new trail slots.
+    this.slideFrom.clear();
+    this.segments.forEach((seg, i) => { if (!remove.has(i)) this.slideFrom.set(seg, { x: seg.x, y: seg.y }); });
+    this.slideStart = now;
+    const newIndex: number[] = [];
+    let n = 0;
+    for (let i = 0; i < this.segments.length; i++) newIndex.push(remove.has(i) ? -1 : n++);
+    for (let k = this.weapons.length - 1; k >= 0; k--) {
+      const w = this.weapons[k]!;
+      if (w.segmentIndex < 0) continue;
+      if (!remove.has(w.segmentIndex)) { w.segmentIndex = newIndex[w.segmentIndex]!; continue; }
+      this.weapons.splice(k, 1);
+      if (w.segmentIndex === keepAsTurret) this.spawnTurret(w, this.body[keepAsTurret]!, now);
+    }
+    for (const i of [...remove].sort((a, b) => b - a)) {
+      const s = this.body[i]!;
+      s.healthBar.destroy(); s.auraRing?.destroy();
+      if (i !== keepAsTurret) s.sprite.destroy(true);
+      this.body.splice(i, 1); this.segments.splice(i, 1);
+    }
+    this.segments.forEach((seg, i) => { seg.setData("segIndex", i); seg.setDepth(18 - Math.min(i, 10)); });
+    this.trimHistory();
+    this.layoutSegments(now);
+  }
+  private spawnTurret(w: Weapon, s: BodySegment, now: number) {
+    const sprite = s.sprite;
+    this.segmentGroup.remove(sprite);
+    const body = sprite.body as Phaser.Physics.Arcade.Body | undefined;
+    if (body) body.enable = false;
+    sprite.setDepth(9);
+    s.segmentSprite.clearTint(); s.segmentSprite.setTint(s.baseTint);
+    const ring = this.scene.add.circle(sprite.x, sprite.y, SEGMENT_RADIUS + 8, s.baseTint, 0);
+    ring.setStrokeStyle(2, s.baseTint, 0.85); ring.setDepth(9);
+    this.scene.tweens.add({ targets: sprite, scale: 1.25, duration: 120, yoyo: true, ease: "Quad.easeOut" });
+    this.turrets.push({ weapon: w, x: sprite.x, y: sprite.y, until: now + SHED_TURRET_MS, sprite, ring });
+  }
+  /** Turret ring shrinks as time runs out; expired turrets fade and are destroyed. */
+  private expireTurrets(now: number) {
+    for (let k = this.turrets.length - 1; k >= 0; k--) {
+      const t = this.turrets[k]!;
+      const left = (t.until - now) / SHED_TURRET_MS;
+      if (left > 0) {
+        t.ring.setScale(0.6 + 0.8 * left);
+        t.sprite.setAlpha(left < 0.2 ? 0.55 + 0.45 * Math.abs(Math.sin(now / 60)) : 1);
+        continue;
+      }
+      this.turrets.splice(k, 1);
+      t.ring.destroy();
+      this.scene.tweens.add({ targets: t.sprite, alpha: 0, scale: 0.4, duration: 180, onComplete: () => t.sprite.destroy(true) });
+    }
   }
   get stunned() { return this.scene.time.now < this.stunUntil; }
   canSelfHit(now: number) { return now >= this.selfHitReadyAt; }
@@ -360,6 +447,8 @@ export class SnakePlayer {
   destroy() {
     this.head.destroy(true); this.headAuraRing?.destroy();
     for (const s of this.body) { s.healthBar.destroy(); s.auraRing?.destroy(); s.sprite.destroy(true); }
+    for (const t of this.turrets) { t.ring.destroy(); t.sprite.destroy(true); }
+    this.turrets.length = 0; this.slideFrom.clear();
     this.segments.length = 0; this.body.length = 0; this.positionHistory.length = 0; this.weapons.length = 0;
   }
   private syncBard(moving: boolean) {
@@ -495,23 +584,29 @@ export class SnakePlayer {
     const seen = new Set<number>();
     for (const w of this.weapons) {
       if (seen.has(w.segmentIndex)) continue; seen.add(w.segmentIndex);
-      const cd = w.type === "mine_layer" ? mineCadenceMs(w) : weaponCooldown(w, this.cooldownMul);
-      if (now - w.lastFired < cd) continue;
       const origin = this.originFor(w); if (!origin) continue;
+      this.tryFire(w, origin, w.segmentIndex < 0, now, enemies);
+    }
+    // Shed turrets fire like the segment they were (one shot, no head multi-shot).
+    for (const t of this.turrets) this.tryFire(t.weapon, { x: t.x, y: t.y }, false, now, enemies);
+  }
+  private tryFire(w: Weapon, origin: { x: number; y: number }, isHead: boolean, now: number, enemies: EnemyScan[]) {
+      const cd = w.type === "mine_layer" ? mineCadenceMs(w) : weaponCooldown(w, this.cooldownMul);
+      if (now - w.lastFired < cd) return;
       const dmg = weaponDamage(w, this.damageMul); const range = weaponRange(w);
-      if (w.type === "aura") { this.fire({ kind: "aura", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.aura, radius: range }); w.lastFired = now; continue; }
-      if (w.type === "mine_layer") { this.fire({ kind: "mine", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.mine, radius: 22 + w.tier * 6 }); w.lastFired = now; continue; }
-      const target = this.nearestEnemyTo(origin.x, origin.y, enemies); if (!target) continue;
+      if (w.type === "aura") { this.fire({ kind: "aura", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.aura, radius: range }); w.lastFired = now; return; }
+      if (w.type === "mine_layer") { this.fire({ kind: "mine", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.mine, radius: 22 + w.tier * 6 }); w.lastFired = now; return; }
+      const target = this.nearestEnemyTo(origin.x, origin.y, enemies); if (!target) return;
       const dx = target.x - origin.x, dy = target.y - origin.y, mag = Math.hypot(dx, dy) || 1;
-      if (mag > range) continue;
+      if (mag > range) return;
       const angle = Math.atan2(dy, dx), ux = dx / mag, uy = dy / mag;
       if (w.type === "mortar") {
         const aoe = MORTAR_AOE_BASE * this.areaOfEffect * (1 + (w.tier - 1) * 0.2);
         this.fire({ kind: "mortar", x: origin.x, y: origin.y, vx: 0, vy: 0, damage: dmg, color: COLOR.mortar, radius: 7, tx: target.x, ty: target.y, aoe });
-        w.lastFired = now; continue;
+        w.lastFired = now; return;
       }
       if (w.type === "single_shot") {
-        const shots = w.segmentIndex < 0 ? Math.max(1, w.tier) : 1;
+        const shots = isHead ? Math.max(1, w.tier) : 1;
         const mid = (shots - 1) / 2;
         const spread = shots > 1 ? 0.1 : 0;
         for (let i = 0; i < shots; i++) {
@@ -519,7 +614,7 @@ export class SnakePlayer {
           this.fire({ kind: "bullet", x: origin.x + Math.cos(a) * 16, y: origin.y + Math.sin(a) * 16, vx: Math.cos(a) * SHOT_SPEED, vy: Math.sin(a) * SHOT_SPEED, damage: dmg, color: COLOR.singleShot, radius: 4, hitSpark: true });
         }
       } else if (w.type === "cone_burst") {
-        const pellets = w.segmentIndex < 0 ? 3 * Math.max(1, w.tier) : 3;
+        const pellets = isHead ? 3 * Math.max(1, w.tier) : 3;
         const mid = (pellets - 1) / 2;
         const spread = pellets > 5 ? CONE_SPREAD * 0.72 : CONE_SPREAD;
         for (let i = 0; i < pellets; i++) {
@@ -529,7 +624,7 @@ export class SnakePlayer {
       } else if (w.type === "railgun") this.fire({ kind: "bullet", x: origin.x + ux * 18, y: origin.y + uy * 18, vx: ux * RAIL_SPEED, vy: uy * RAIL_SPEED, damage: dmg, color: COLOR.rail, radius: 3, pierce: true });
       else if (w.type === "chain_lightning") this.fire({ kind: "chain", x: origin.x, y: origin.y, vx: ux * 640, vy: uy * 640, damage: dmg, color: COLOR.chain, radius: 6, bounces: CHAIN_BOUNCES, bounceRadius: CHAIN_RADIUS });
       else {
-        const hits = w.segmentIndex < 0 ? Math.max(1, w.tier) : 1;
+        const hits = isHead ? Math.max(1, w.tier) : 1;
         const arc = SLASH_ARC * (1 + (hits - 1) * 0.32);
         const slashRange = range * (1 + (hits - 1) * 0.1);
         for (let i = 0; i < hits; i++) {
@@ -540,7 +635,6 @@ export class SnakePlayer {
         }
       }
       w.lastFired = now;
-    }
   }
   private playSlash(x: number, y: number, angle: number, range: number, arc: number) {
     const g = this.scene.add.graphics(); g.setDepth(19); g.setPosition(x, y);
@@ -553,12 +647,18 @@ export class SnakePlayer {
    * walking head → newest → oldest positionHistory point and interpolating inside each piece.
    * Spacing no longer depends on frame rate or speed.
    */
-  private layoutSegments() {
+  private layoutSegments(now = this.scene.time.now) {
     const hist = this.positionHistory;
     let ax = this.head.x, ay = this.head.y; // start of the current path piece
     let aheadX = ax, aheadY = ay; // previous car (or head), for rotation
     let walked = 0; // path length from head to (ax, ay)
     let idx = hist.length - 1;
+    // Post-shed slide: ease (cubic out) from the pre-shed spot to the trail spot over SHED_SLIDE_MS.
+    let slideT = 1;
+    if (this.slideFrom.size > 0) {
+      const t = (now - this.slideStart) / SHED_SLIDE_MS;
+      if (t >= 1) this.slideFrom.clear(); else slideT = 1 - Math.pow(1 - Math.max(0, t), 3);
+    }
     for (let i = 0; i < this.segments.length; i++) {
       const target = (i + 1) * SEGMENT_SPACING;
       let px = ax, py = ay;
@@ -573,6 +673,10 @@ export class SnakePlayer {
         walked += len; ax = b.x; ay = b.y; px = ax; py = ay; idx--;
       }
       const seg = this.segments[i]!;
+      if (slideT < 1) {
+        const from = this.slideFrom.get(seg);
+        if (from) { px = from.x + (px - from.x) * slideT; py = from.y + (py - from.y) * slideT; }
+      }
       seg.setPosition(px, py);
       const ang = Math.atan2(aheadY - py, aheadX - px);
       if (Number.isFinite(ang) && (aheadX !== px || aheadY !== py)) seg.setRotation(ang);

@@ -9,7 +9,7 @@ import {
   COIL_MIN_SEGMENT_INDEX,
 } from "./constants";
 import { ENEMY_BASE, ENEMY_HP_BASE, Enemy, type HordeKind, type EnemySpec } from "./Enemy";
-import { isGameStarted, sampleMove } from "./input";
+import { consumeShed, isGameStarted, sampleMove } from "./input";
 import { patchHud, runtime, setLevelOffers } from "./runtime";
 import { rollLevelOffers, type GlobalStatId } from "./stats";
 import { bankInterest, canAffordAny, rollShopOffers, SHOP_PITY_GOLD, SHOP_PITY_HP, SHOP_SLOTS, type ShopKind, type ShopOffer } from "./shop";
@@ -61,6 +61,7 @@ export function installMainSceneRestA(proto: any) {
     }
     const dt = Math.min(delta, 50) / 1000;
     const move = sampleMove();
+    const shedPressed = consumeShed(); // always consume so a press outside combat isn't queued
     const combatOn = isGameStarted() && !this.waveClear && !this.dead && !this.leveling;
     this.player.update(dt, move.x, move.y, time, this.enemies, combatOn);
     if (combatOn) {
@@ -81,7 +82,7 @@ export function installMainSceneRestA(proto: any) {
           }
         }
         this.shots.update(dt, (x, y, dmg, r, mark, pierce) => this.hitEnemiesAt(x, y, dmg, r, mark, pierce));
-        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkCoil(time); this.checkSelfCollision(time); if (this.dead) return; this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
+        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); if (shedPressed) this.tryShed(time); this.checkCoil(time); this.checkSelfCollision(time); if (this.dead) return; this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
       }
     }
     this.hudAcc += delta;
@@ -98,6 +99,7 @@ export function installMainSceneRestA(proto: any) {
         hud.totalGoldEarned = this.totalGoldEarned; hud.nextWaveBank = this.nextWaveBank;
         hud.fever = time < this.feverUntil; hud.combo = this.gemTimes.length;
         hud.coilMs = this.player.segments.length > COIL_MIN_SEGMENT_INDEX ? Math.max(0, this.coilReadyAt - time) : -1;
+        hud.shedMs = this.player.segments.length > 0 && !this.waveClear ? Math.max(0, this.shedReadyAt - time) : -1;
         patchHud(hud);
       }
     }

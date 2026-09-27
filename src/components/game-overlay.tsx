@@ -1,6 +1,6 @@
 import { Circle, CreditCard, Crosshair, Gauge, Heart, Lock, Magnet, Play, Plus, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { hasGamepad, isGameStarted, sampleGamepadUi, setGameStarted } from "@/game/input";
+import { hasGamepad, isGameStarted, requestShed, sampleGamepadUi, setGameStarted } from "@/game/input";
 import {
   getHud,
   pickLevelOffer,
@@ -155,6 +155,7 @@ export function GameOverlay() {
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
           <Stat label={`Lv ${hud.playerLevel ?? 1}`} value={`${hud.xp ?? 0}/${hud.xpNextLevel ?? 18}`} />
           {(hud.coilMs ?? -1) >= 0 ? <Stat label="Coil" value={(hud.coilMs ?? 0) <= 0 ? "Ready" : `${((hud.coilMs ?? 0) / 1000).toFixed(1)}s`} /> : null}
+          {(hud.shedMs ?? -1) >= 0 ? <Stat label="Shed" value={(hud.shedMs ?? 0) <= 0 ? "Ready" : `${((hud.shedMs ?? 0) / 1000).toFixed(1)}s`} /> : null}
           {hud.fever ? <Stat label="Fever" value={`x2 \u00b7 ${hud.combo ?? 0}`} /> : null}
         </div>
       </header>
@@ -162,9 +163,24 @@ export function GameOverlay() {
       <div className="flex items-end justify-between p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <VirtualStick className="pointer-events-auto [@media(pointer:fine)]:hidden" />
         <p className="hidden rounded-lg border border-border bg-surface/70 px-3 py-2 text-xs text-muted [@media(pointer:fine)]:block">
-          {padOn ? "Left stick / D-pad \u00b7 A confirm \u00b7 Start next" : "WASD or gamepad \u00b7 head collects gems"}
+          {padOn ? "Left stick / D-pad \u00b7 RB shed tail \u00b7 A confirm \u00b7 Start next" : "WASD move \u00b7 E shed tail \u00b7 head collects gems"}
         </p>
-        <div className="h-[132px] w-[132px] [@media(pointer:fine)]:hidden" aria-hidden />
+        <div className="flex h-[132px] w-[132px] items-end justify-end [@media(pointer:fine)]:hidden">
+          {(hud.shedMs ?? -1) >= 0 ? (
+            <button
+              type="button"
+              onPointerDown={(e) => { e.preventDefault(); requestShed(); }}
+              disabled={(hud.shedMs ?? 0) > 0}
+              aria-label="Shed tail"
+              className={cn(
+                "pointer-events-auto size-[84px] touch-none select-none rounded-full border text-xs font-medium tracking-[0.14em] shadow-[0_8px_28px_rgba(0,0,0,0.35)] active:scale-95",
+                (hud.shedMs ?? 0) > 0 ? "border-border bg-surface/50 text-muted" : "border-fg/40 bg-surface/85 text-fg uppercase",
+              )}
+            >
+              {(hud.shedMs ?? 0) > 0 ? `${Math.ceil((hud.shedMs ?? 0) / 1000)}s` : "Shed"}
+            </button>
+          ) : null}
+        </div>
       </div>
       {showStart ? (
         <div className="pointer-events-auto absolute inset-0 overflow-y-auto overscroll-contain bg-bg/72 px-4 py-8 backdrop-blur-[2px]">

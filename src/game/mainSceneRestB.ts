@@ -3,7 +3,8 @@ import {
   COIL_BASE_DAMAGE, COIL_BITE_GRACE_MS, COIL_COOLDOWN_MS, COIL_DAMAGE_PER_SEGMENT,
   COLOR, COMBO_TRIGGER, COMBO_WINDOW_MS, ENEMY_RADIUS,
   ERA_BOSS_DMG_MUL, ERA_BOSS_HP_MUL, GOLD_TALLY_MS,
-  PLAYER_IFRAME_MS, SEGMENT_RADIUS, SELF_HIT_DAMAGE, WAVE_DURATION_MS, WORLD_SIZE,
+  PLAYER_IFRAME_MS, SEGMENT_RADIUS, SELF_HIT_DAMAGE, SHED_BITE_GRACE_MS, SHED_BLAST_DAMAGE,
+  SHED_BLAST_RADIUS, SHED_COOLDOWN_MS, WAVE_DURATION_MS, WORLD_SIZE,
 } from "./constants";
 import { Enemy, type EnemySpec } from "./Enemy";
 import { patchHud, runtime } from "./runtime";
@@ -254,6 +255,48 @@ export function installMainSceneRestB(proto: any) {
     t.setOrigin(0.5); t.setDepth(33);
     this.tweens.add({ targets: t, y: cy - 34, alpha: 0, duration: 800, ease: "Cubic.easeOut", onComplete: () => t.destroy() });
     this.playCoilChime?.();
+  }
+
+  /**
+   * Shedding (E / gamepad RB/RT / mobile SHED): greyed cars all detach and explode; with none greyed the
+   * tail car detaches as a turret (SnakePlayer.shed). Combat only, SHED_COOLDOWN_MS between sheds.
+   */
+  proto.tryShed = function(this: any, now: number) {
+    if (now < (this.shedReadyAt ?? 0)) return;
+    const p = this.player;
+    const shed = p.shed(now) as { x: number; y: number; kind: "explode" | "turret" }[];
+    if (shed.length === 0) return;
+    this.shedReadyAt = now + SHED_COOLDOWN_MS;
+    p.grantSelfHitGrace(now, SHED_BITE_GRACE_MS);
+    const dmg = Math.max(1, Math.round(SHED_BLAST_DAMAGE * p.damageMul));
+    let blasts = 0;
+    for (const s of shed) {
+      if (s.kind !== "explode") continue;
+      blasts += 1;
+      this.playMortarExplosion?.(s.x, s.y, SHED_BLAST_RADIUS);
+      for (const e of [...this.enemies]) if (e.alive && e.overlaps(s.x, s.y, SHED_BLAST_RADIUS)) this.applyEnemyHit(e, dmg);
+    }
+    if (blasts > 0) this.cameras.main.shake(120, 0.005);
+    const last = shed[shed.length - 1]!;
+    const label = blasts > 0 ? (blasts > 1 ? `SHED x${blasts}` : "SHED") : "TURRET";
+    const t = this.add.text(last.x, last.y - 20, label, { fontFamily: "IBM Plex Mono, monospace", fontSize: "15px", color: blasts > 0 ? "#ff9d5c" : "#9be7ff", stroke: "#10131a", strokeThickness: 3 });
+    t.setOrigin(0.5); t.setDepth(33);
+    this.tweens.add({ targets: t, y: last.y - 50, alpha: 0, duration: 700, ease: "Cubic.easeOut", onComplete: () => t.destroy() });
+    this.playShedPop?.(blasts > 0);
+    patchHud({ segments: p.segments.length, shedMs: SHED_COOLDOWN_MS });
+  }
+
+  proto.playShedPop = function(this: any, boom: boolean) {
+    try {
+      const AC = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return; if (!this.audioCtx) this.audioCtx = new AC();
+      const ctx = this.audioCtx; if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator(), gain = ctx.createGain(); osc.type = boom ? "sawtooth" : "sine";
+      osc.frequency.setValueAtTime(boom ? 220 : 520, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(boom ? 55 : 260, ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.24);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.25);
+    } catch { /* optional */ }
   }
 
   proto.playCoilChime = function(this: any) {
