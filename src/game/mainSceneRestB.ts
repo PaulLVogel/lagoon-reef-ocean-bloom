@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import {
+  COIL_BASE_DAMAGE, COIL_BITE_GRACE_MS, COIL_COOLDOWN_MS, COIL_DAMAGE_PER_SEGMENT,
   COLOR, COMBO_TRIGGER, COMBO_WINDOW_MS, ENEMY_RADIUS,
   ERA_BOSS_DMG_MUL, ERA_BOSS_HP_MUL, GOLD_TALLY_MS,
   PLAYER_IFRAME_MS, SEGMENT_RADIUS, SELF_HIT_DAMAGE, WAVE_DURATION_MS, WORLD_SIZE,
@@ -219,6 +220,53 @@ export function installMainSceneRestB(proto: any) {
         this.player.damageSegment(i, e.contact, now);
       }
     }
+  }
+
+  /**
+   * Coiling: head closes a loop with its own path (car index >= COIL_MIN_SEGMENT_INDEX, enclosed area >=
+   * COIL_MIN_AREA). Every live enemy whose centre is inside the loop takes (BASE + PER_SEGMENT × cars) × damage stat.
+   * Runs before checkSelfCollision; firing grants COIL_BITE_GRACE_MS of SELF-BITE immunity. On cooldown → no-op, so bites apply.
+   */
+  proto.checkCoil = function(this: any, now: number) {
+    if (now < (this.coilReadyAt ?? 0)) return;
+    const p = this.player;
+    const loop = p.coilLoop();
+    if (!loop) return;
+    this.coilReadyAt = now + COIL_COOLDOWN_MS;
+    p.grantSelfHitGrace(now, COIL_BITE_GRACE_MS);
+    const cars = loop.index + 1;
+    const dmg = Math.max(1, Math.round((COIL_BASE_DAMAGE + COIL_DAMAGE_PER_SEGMENT * cars) * p.damageMul));
+    const poly = new Phaser.Geom.Polygon(loop.points.map((q: { x: number; y: number }) => new Phaser.Geom.Point(q.x, q.y)));
+    let caught = 0;
+    for (const e of [...this.enemies]) {
+      if (!e.alive || !Phaser.Geom.Polygon.Contains(poly, e.x, e.y)) continue;
+      caught += 1; this.applyEnemyHit(e, dmg);
+    }
+    // Feedback: gold fill + outline that fades, small shake, centred label, rising chime.
+    const g = this.add.graphics(); g.setDepth(18);
+    g.fillStyle(0xffd23f, 0.38); g.fillPoints(poly.points, true);
+    g.lineStyle(4, 0xfff3a0, 0.95); g.strokePoints(poly.points, true, true);
+    this.tweens.add({ targets: g, alpha: 0, duration: 420, ease: "Cubic.easeOut", onComplete: () => g.destroy() });
+    this.cameras.main.shake(110, 0.004);
+    let cx = 0, cy = 0; for (const q of loop.points) { cx += q.x; cy += q.y; } cx /= loop.points.length; cy /= loop.points.length;
+    const label = caught > 0 ? `COIL x${caught}` : "COIL";
+    const t = this.add.text(cx, cy, label, { fontFamily: "IBM Plex Mono, monospace", fontSize: "18px", color: "#ffe066", stroke: "#2a1c00", strokeThickness: 4 });
+    t.setOrigin(0.5); t.setDepth(33);
+    this.tweens.add({ targets: t, y: cy - 34, alpha: 0, duration: 800, ease: "Cubic.easeOut", onComplete: () => t.destroy() });
+    this.playCoilChime?.();
+  }
+
+  proto.playCoilChime = function(this: any) {
+    try {
+      const AC = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return; if (!this.audioCtx) this.audioCtx = new AC();
+      const ctx = this.audioCtx; if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator(), gain = ctx.createGain(); osc.type = "triangle";
+      osc.frequency.setValueAtTime(330, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(990, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.07, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.26);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.27);
+    } catch { /* optional */ }
   }
 
   /** Self-collision: head overlapping its own body (past the neck) costs head HP, knocks back + stuns, then cools down. */

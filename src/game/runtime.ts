@@ -25,6 +25,8 @@ export type HudSnap = {
   shopOffers: ShopOffer[];
   shopPicked: string | null;
   fever: boolean;
+  /** Coiling: ms until the coil is ready (0 = ready), or -1 when the train is too short to coil. */
+  coilMs: number;
   combo: number;
   lastInterest: number;
   shopFrozen: boolean;
@@ -95,6 +97,7 @@ const emptyHud = (): HudSnap => ({
   shopOffers: [],
   shopPicked: null,
   fever: false,
+  coilMs: -1,
   combo: 0,
   lastInterest: 0,
   shopFrozen: false,
@@ -240,6 +243,7 @@ export function requestRestart() {
     shopBought: [],
     shopCart: [],
     fever: false,
+    coilMs: -1,
     combo: 0,
     lastInterest: 0,
     shopFrozen: false,

@@ -154,6 +154,7 @@ export function GameOverlay() {
           <Stat label="Kills" value={String(hud.kills ?? 0)} />
           <Stat label="Seg" value={String(hud.segments ?? 0)} />
           <Stat label={`Lv ${hud.playerLevel ?? 1}`} value={`${hud.xp ?? 0}/${hud.xpNextLevel ?? 18}`} />
+          {(hud.coilMs ?? -1) >= 0 ? <Stat label="Coil" value={(hud.coilMs ?? 0) <= 0 ? "Ready" : `${((hud.coilMs ?? 0) / 1000).toFixed(1)}s`} /> : null}
           {hud.fever ? <Stat label="Fever" value={`x2 \u00b7 ${hud.combo ?? 0}`} /> : null}
         </div>
       </header>

@@ -26,6 +26,19 @@ export const SELF_HIT_COOLDOWN_MS = 900;
 export const SELF_HIT_STUN_MS = 220;
 /** Self-collision: initial knockback speed (px/s), decays to 0 over the stun. */
 export const SELF_HIT_KNOCKBACK = 460;
+/** Coiling: the head must close on segment index >= this (0-based; 4 = the 5th car) to form a loop. */
+export const COIL_MIN_SEGMENT_INDEX = 4;
+/** Coiling: head centre within this many px of that car's centre closes the loop. Bigger than the SELF-BITE radius (~21 px) so the coil wins the race. */
+export const COIL_CLOSE_DIST = 36;
+/** Coiling: loop polygon must enclose at least this area (px²). Thin loops (reversing into yourself) don't count and still bite. */
+export const COIL_MIN_AREA = 5000;
+/** Coiling: time before the next coil can fire. While cooling down, touching the body bites as usual. */
+export const COIL_COOLDOWN_MS = 4000;
+/** Coiling: SELF-BITE is suppressed for this long after a coil fires (lets the head slide past the closed loop). */
+export const COIL_BITE_GRACE_MS = 500;
+/** Coiling: damage = (BASE + PER_SEGMENT × cars in the loop) × player damage stat. */
+export const COIL_BASE_DAMAGE = 60;
+export const COIL_DAMAGE_PER_SEGMENT = 8;
 export const DEFAULT_SEGMENT_COUNT = 0;
 export const BASE_SPEED = 240;
 export const PLAYER_MAX_HP = 100;

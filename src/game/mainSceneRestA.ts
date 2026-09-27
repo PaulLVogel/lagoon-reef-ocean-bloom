@@ -6,6 +6,7 @@ import {
   PLAYER_IFRAME_MS, PLAYER_MAX_HP, SEGMENT_RADIUS, SPAWN_INTERVAL_MIN_MS, SPAWN_INTERVAL_MS,
   TILE, MORTAR_FX_ANIM, MORTAR_FX_FPS, MORTAR_FX_FRAME_H, MORTAR_FX_FRAME_W, MORTAR_FX_FRAMES, MORTAR_FX_SHEET,
   WAVE_DURATION_MS, WORLD_SIZE, xpForLevel,
+  COIL_MIN_SEGMENT_INDEX,
 } from "./constants";
 import { ENEMY_BASE, ENEMY_HP_BASE, Enemy, type HordeKind, type EnemySpec } from "./Enemy";
 import { isGameStarted, sampleMove } from "./input";
@@ -80,7 +81,7 @@ export function installMainSceneRestA(proto: any) {
           }
         }
         this.shots.update(dt, (x, y, dmg, r, mark, pierce) => this.hitEnemiesAt(x, y, dmg, r, mark, pierce));
-        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkSelfCollision(time); if (this.dead) return; this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
+        this.tickMines(time); this.tickMortars(dt); this.tickHostiles(dt, time); this.checkCoil(time); this.checkSelfCollision(time); if (this.dead) return; this.checkPlayerContact(time); this.collectLoot(dt, time); this.pruneDead();
       }
     }
     this.hudAcc += delta;
@@ -96,6 +97,7 @@ export function installMainSceneRestA(proto: any) {
         if (!this.waveClear) { hud.gold = this.gold; hud.goldDisplay = this.goldDisplay; }
         hud.totalGoldEarned = this.totalGoldEarned; hud.nextWaveBank = this.nextWaveBank;
         hud.fever = time < this.feverUntil; hud.combo = this.gemTimes.length;
+        hud.coilMs = this.player.segments.length > COIL_MIN_SEGMENT_INDEX ? Math.max(0, this.coilReadyAt - time) : -1;
         patchHud(hud);
       }
     }

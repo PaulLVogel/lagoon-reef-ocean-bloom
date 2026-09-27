@@ -4,6 +4,9 @@ import {
   BARD_SCALE,
   BARD_SHEET,
   COLOR,
+  COIL_CLOSE_DIST,
+  COIL_MIN_AREA,
+  COIL_MIN_SEGMENT_INDEX,
   DEFAULT_SEGMENT_COUNT,
   HEAD_RADIUS,
   HISTORY_MIN_STEP,
@@ -293,6 +296,43 @@ export class SnakePlayer {
     }
     return -1;
   }
+  /**
+   * Coiling: if the head is within COIL_CLOSE_DIST of a car at index >= COIL_MIN_SEGMENT_INDEX and the
+   * path between them (head → positionHistory → that car) encloses at least COIL_MIN_AREA, return that
+   * loop polygon. Thin loops (e.g. reversing straight back into yourself) return null so SELF-BITE handles them.
+   */
+  coilLoop(): { index: number; points: { x: number; y: number }[]; area: number } | null {
+    if (this.segments.length <= COIL_MIN_SEGMENT_INDEX) return null;
+    const hx = this.head.x, hy = this.head.y, r2 = COIL_CLOSE_DIST * COIL_CLOSE_DIST;
+    for (let i = COIL_MIN_SEGMENT_INDEX; i < this.segments.length; i++) {
+      const seg = this.segments[i]!;
+      const dx = seg.x - hx, dy = seg.y - hy;
+      if (dx * dx + dy * dy >= r2) continue;
+      const points = this.pathPolygonTo(i);
+      const area = polygonArea(points);
+      if (area >= COIL_MIN_AREA) return { index: i, points, area };
+    }
+    return null;
+  }
+  /** Head, then the trail path back to car `index` (same arc-length walk as layoutSegments). */
+  private pathPolygonTo(index: number) {
+    const target = (index + 1) * SEGMENT_SPACING;
+    const hist = this.positionHistory;
+    const pts: { x: number; y: number }[] = [{ x: this.head.x, y: this.head.y }];
+    let ax = this.head.x, ay = this.head.y, walked = 0;
+    for (let k = hist.length - 1; k >= 0; k--) {
+      const b = hist[k]!;
+      const len = Math.hypot(b.x - ax, b.y - ay);
+      if (walked + len >= target) break;
+      walked += len; ax = b.x; ay = b.y;
+      pts.push({ x: b.x, y: b.y });
+    }
+    const seg = this.segments[index]!;
+    pts.push({ x: seg.x, y: seg.y });
+    return pts;
+  }
+  /** Suppress SELF-BITE until at least `now + ms` (used right after a coil fires). */
+  grantSelfHitGrace(now: number, ms: number) { this.selfHitReadyAt = Math.max(this.selfHitReadyAt, now + ms); }
   /** Start the self-hit knockback/stun/cooldown away from segment `index`, with head + segment flash. */
   knockFromSegment(index: number, now: number) {
     const seg = this.segments[index];
@@ -581,4 +621,11 @@ export class SnakePlayer {
       if (len > max) { if (i > 0) hist.splice(0, i); return; }
     }
   }
+}
+
+/** Absolute shoelace area of a closed polygon. */
+function polygonArea(pts: { x: number; y: number }[]) {
+  let s = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) s += (pts[j]!.x + pts[i]!.x) * (pts[j]!.y - pts[i]!.y);
+  return Math.abs(s) / 2;
 }
